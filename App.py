@@ -5,6 +5,7 @@ import joblib
 import bisect
 import io
 import datetime
+import scipy.stats as stats_scipy
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -14,7 +15,7 @@ import matplotlib.patches as mpatches
 # PAGE CONFIG
 # ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="Prediksi Stunting Balita",
+    page_title="SkriningGizi · Prediksi Stunting",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -33,6 +34,7 @@ st.markdown("""
     --text-1: #f1f5f9; --text-2: #94a3b8; --text-3: #64748b;
     --border: rgba(255,255,255,.08); --border-gold:rgba(201,168,76,.3);
     --success:#34d399; --warn:#facc15; --orange:#fb923c; --danger:#f87171;
+    --teal:#4fd1c5; --purple:#a78bfa;
 }
 html,body,[class*="css"],.stApp,.main,
 div[data-testid="stAppViewContainer"],
@@ -53,38 +55,24 @@ section[data-testid="stSidebar"]{
 section[data-testid="stSidebar"] * { color:var(--text-2)!important; }
 section[data-testid="stSidebar"] .stRadio label { font-size:.9rem!important; }
 
-/* ── HERO ── */
-.hero-wrap{
-    position:relative; text-align:center;
-    padding:2.5rem 2rem 2.2rem; margin-bottom:2rem;
-    border-radius:24px; background:var(--navy-3);
-    border:1px solid var(--border-gold); overflow:hidden;
-    animation:fadeDown .6s ease both;
+/* ── TOP BAR ── */
+.topbar{
+    display:flex; align-items:center; gap:1rem;
+    padding:1rem 1.6rem; margin-bottom:1.8rem;
+    background:var(--navy-3); border:1px solid var(--border-gold);
+    border-radius:16px;
 }
-.hero-wrap::before{
-    content:''; position:absolute; inset:0;
-    background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(201,168,76,.12) 0%,transparent 70%);
+.topbar-icon{font-size:1.6rem;line-height:1;}
+.topbar-title{font-family:'Cormorant Garamond',serif;font-size:1.55rem;font-weight:300;color:var(--text-1);}
+.topbar-title em{font-style:italic;color:var(--gold-lt);}
+.topbar-sub{font-size:.73rem;color:var(--text-3);letter-spacing:.04em;margin-top:.1rem;}
+.topbar-right{margin-left:auto;text-align:right;}
+.topbar-badge{
+    display:inline-block; background:var(--gold-dim);
+    border:1px solid var(--border-gold); color:var(--gold-lt);
+    font-size:.62rem; font-weight:600; letter-spacing:.12em;
+    text-transform:uppercase; padding:.28rem .75rem; border-radius:100px;
 }
-.hero-wrap::after{
-    content:''; position:absolute; bottom:-1px; left:0; right:0; height:1px;
-    background:linear-gradient(90deg,transparent,var(--gold),transparent);
-}
-.hero-badge{
-    display:inline-flex; align-items:center; gap:.4rem;
-    background:var(--gold-dim); border:1px solid var(--border-gold);
-    color:var(--gold-lt); font-size:.68rem; font-weight:600;
-    letter-spacing:.14em; text-transform:uppercase;
-    padding:.32rem .9rem; border-radius:100px; margin-bottom:1.2rem;
-}
-.hero-title{
-    font-family:'Cormorant Garamond',serif!important;
-    font-size:2.6rem!important; font-weight:300!important;
-    letter-spacing:-.03em!important; line-height:1.1!important;
-    color:var(--text-1)!important; margin:0 0 .3rem!important;
-}
-.hero-title em{font-style:italic;color:var(--gold-lt);}
-.hero-divider{width:36px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:.9rem auto;}
-.hero-sub{font-size:.85rem!important;color:var(--text-3)!important;font-weight:300!important;line-height:1.7!important;margin:0!important;}
 
 /* ── SECTION LABEL ── */
 .slabel{
@@ -104,13 +92,15 @@ section[data-testid="stSidebar"] .stRadio label { font-size:.9rem!important; }
 
 /* ── WIDGETS ── */
 div[data-testid="stNumberInput"] input,
-div[data-testid="stSelectbox"]>div>div{
+div[data-testid="stSelectbox"]>div>div,
+div[data-testid="stTextInput"] input{
     background:var(--navy-3)!important; border:1.5px solid rgba(255,255,255,.1)!important;
     border-radius:12px!important; color:var(--text-1)!important;
     font-family:'Outfit',sans-serif!important;
 }
 div[data-testid="stNumberInput"] input:focus,
-div[data-testid="stSelectbox"]>div>div:focus-within{
+div[data-testid="stSelectbox"]>div>div:focus-within,
+div[data-testid="stTextInput"] input:focus{
     border-color:var(--gold)!important;
     box-shadow:0 0 0 3px var(--gold-dim)!important;
 }
@@ -128,90 +118,103 @@ div[data-testid="stNumberInput"] button{
     background:var(--navy-4)!important; border:1px solid var(--border)!important;
     color:var(--text-3)!important; border-radius:8px!important;
 }
-div[data-testid="stSlider"] .stSlider>div>div>div{background:var(--gold)!important;}
 
 /* ── CTA BUTTON ── */
 .stButton>button{
     width:100%!important;
     background:linear-gradient(135deg,#9a6e1a,var(--gold) 50%,var(--gold-lt))!important;
     color:#0b1120!important; border:none!important; border-radius:14px!important;
-    padding:.95rem 2rem!important; font-size:.92rem!important; font-weight:600!important;
-    letter-spacing:.08em!important; text-transform:uppercase!important;
+    padding:.9rem 2rem!important; font-size:.9rem!important; font-weight:600!important;
+    letter-spacing:.07em!important; text-transform:uppercase!important;
     font-family:'Outfit',sans-serif!important;
-    box-shadow:0 8px 28px rgba(201,168,76,.3)!important;
+    box-shadow:0 8px 24px rgba(201,168,76,.28)!important;
     transition:all .3s cubic-bezier(.4,0,.2,1)!important;
 }
-.stButton>button:hover{transform:translateY(-2px)!important;box-shadow:0 14px 36px rgba(201,168,76,.4)!important;}
+.stButton>button:hover{transform:translateY(-2px)!important;box-shadow:0 12px 32px rgba(201,168,76,.38)!important;}
 
 /* ── RESULT PANELS ── */
-.rp{border-radius:22px;padding:2rem;text-align:center;position:relative;overflow:hidden;animation:resultPop .6s cubic-bezier(.34,1.56,.64,1) both;}
+.rp{border-radius:20px;padding:1.8rem;text-align:center;position:relative;overflow:hidden;animation:resultPop .5s cubic-bezier(.34,1.4,.64,1) both;}
 .rp::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 65% 45% at 50% 0%,var(--rp-glow) 0%,transparent 70%);}
-.rp-normal{background:linear-gradient(160deg,#091a12,#0d2218);border:1px solid rgba(52,211,153,.25);--rp-glow:rgba(52,211,153,.12);}
+.rp-normal {background:linear-gradient(160deg,#091a12,#0d2218);border:1px solid rgba(52,211,153,.25);--rp-glow:rgba(52,211,153,.12);}
 .rp-waspada{background:linear-gradient(160deg,#1a1400,#221a00);border:1px solid rgba(250,204,21,.25);--rp-glow:rgba(250,204,21,.10);}
-.rp-sedang{background:linear-gradient(160deg,#1a0e00,#221400);border:1px solid rgba(251,146,60,.25);--rp-glow:rgba(251,146,60,.11);}
-.rp-tinggi{background:linear-gradient(160deg,#1a0909,#220d0d);border:1px solid rgba(248,113,113,.25);--rp-glow:rgba(248,113,113,.12);}
-.rp-eyebrow{font-size:.63rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;opacity:.7;margin-bottom:.8rem;position:relative;}
-.rp-icon{font-size:2.4rem;margin-bottom:.4rem;position:relative;line-height:1;}
-.rp-headline{font-family:'Cormorant Garamond',serif;font-size:2.4rem;font-weight:600;letter-spacing:-.03em;line-height:1;margin-bottom:.4rem;position:relative;}
-.rp-prob{font-size:.83rem;font-weight:400;opacity:.65;position:relative;}
+.rp-sedang {background:linear-gradient(160deg,#1a0e00,#221400);border:1px solid rgba(251,146,60,.25);--rp-glow:rgba(251,146,60,.11);}
+.rp-tinggi {background:linear-gradient(160deg,#1a0909,#220d0d);border:1px solid rgba(248,113,113,.25);--rp-glow:rgba(248,113,113,.12);}
+.rp-eyebrow{font-size:.63rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;opacity:.7;margin-bottom:.6rem;position:relative;}
+.rp-icon{font-size:2.2rem;margin-bottom:.3rem;position:relative;line-height:1;}
+.rp-headline{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:600;letter-spacing:-.03em;line-height:1;margin-bottom:.35rem;position:relative;}
+.rp-prob{font-size:.82rem;font-weight:400;opacity:.65;position:relative;}
 
-/* ── Z-SCORE GRID ── */
-.zsgrid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-bottom:1.1rem;}
-.zscard{background:var(--navy-3);border:1px solid var(--border);border-radius:16px;padding:1.3rem;text-align:center;transition:border-color .2s,transform .2s;}
+/* ── Z-SCORE GRID (3-column) ── */
+.zsgrid3{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;margin-bottom:1rem;}
+.zsgrid2{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem;}
+.zscard{background:var(--navy-3);border:1px solid var(--border);border-radius:14px;padding:1.1rem;text-align:center;transition:border-color .2s,transform .15s;}
 .zscard:hover{border-color:var(--border-gold);transform:translateY(-2px);}
-.zstag{font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;font-weight:600;color:var(--text-3);margin-bottom:.6rem;}
-.zsval{font-family:'Cormorant Garamond',serif;font-size:2.6rem;font-weight:300;line-height:1;margin-bottom:.4rem;}
-.zsdesc{font-size:.69rem;color:var(--text-3);margin-bottom:.5rem;}
-.zsbadge{font-size:.71rem;font-weight:500;padding:.25rem .7rem;border-radius:100px;display:inline-block;}
+.zstag{font-size:.6rem;letter-spacing:.13em;text-transform:uppercase;font-weight:600;color:var(--text-3);margin-bottom:.5rem;}
+.zsval{font-family:'Cormorant Garamond',serif;font-size:2.4rem;font-weight:300;line-height:1;margin-bottom:.3rem;}
+.zsdesc{font-size:.68rem;color:var(--text-3);margin-bottom:.4rem;}
+.zsbadge{font-size:.7rem;font-weight:500;padding:.22rem .65rem;border-radius:100px;display:inline-block;}
+.zspct{font-size:.68rem;color:var(--text-3);margin-top:.3rem;}
 
 /* ── GAUGE ── */
-.gwrap{background:var(--navy-3);border:1px solid var(--border);border-radius:16px;padding:1.2rem 1.4rem;margin-bottom:1.1rem;}
-.gtop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.9rem;}
+.gwrap{background:var(--navy-3);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.3rem;margin-bottom:1rem;}
+.gtop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.8rem;}
 .gttl{font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;font-weight:600;color:var(--text-3);}
-.gnum{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:300;line-height:1;}
+.gnum{font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:300;line-height:1;}
 .gtrack{height:6px;border-radius:100px;background:rgba(255,255,255,.07);position:relative;}
 .gbar{position:absolute;left:0;top:0;height:100%;border-radius:100px;background:linear-gradient(90deg,#34d399 0%,#facc15 45%,#fb923c 70%,#f87171 100%);}
-.gpip{position:absolute;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;border:2px solid var(--navy);z-index:2;box-shadow:0 0 8px currentColor;}
-.gtick{display:flex;justify-content:space-between;margin-top:.5rem;font-size:.66rem;color:var(--text-3);}
+.gpip{position:absolute;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;border-radius:50%;border:2px solid var(--navy);z-index:2;box-shadow:0 0 8px currentColor;}
+.gtick{display:flex;justify-content:space-between;margin-top:.4rem;font-size:.65rem;color:var(--text-3);}
 
 /* ── META PILLS ── */
-.metarow{display:flex;gap:.8rem;margin-bottom:1.1rem;}
-.mpill{flex:1;background:var(--navy-3);border:1px solid var(--border);border-radius:13px;padding:.9rem .7rem;text-align:center;transition:border-color .2s;}
+.metarow{display:flex;gap:.7rem;margin-bottom:1rem;flex-wrap:wrap;}
+.mpill{flex:1;min-width:100px;background:var(--navy-3);border:1px solid var(--border);border-radius:12px;padding:.8rem .6rem;text-align:center;transition:border-color .2s;}
 .mpill:hover{border-color:var(--border-gold);}
-.mplabel{font-size:.59rem;letter-spacing:.13em;text-transform:uppercase;color:var(--text-3);font-weight:600;}
-.mpval{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:300;color:var(--text-1);margin:.22rem 0 .12rem;line-height:1;}
-.mpsub{font-size:.66rem;color:var(--text-3);}
+.mplabel{font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);font-weight:600;}
+.mpval{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:300;color:var(--text-1);margin:.18rem 0 .1rem;line-height:1;}
+.mpsub{font-size:.64rem;color:var(--text-3);}
+
+/* ── THREE-INDEX STATUS TABLE ── */
+.tistable{width:100%;border-collapse:separate;border-spacing:0;border-radius:14px;overflow:hidden;border:1px solid var(--border);margin-bottom:1rem;}
+.tistable thead tr{background:var(--navy-4);}
+.tistable th{padding:.6rem .9rem;font-size:.68rem;color:var(--text-3);font-weight:600;letter-spacing:.1em;text-transform:uppercase;text-align:left;}
+.tistable td{padding:.7rem .9rem;font-size:.84rem;color:var(--text-2);border-top:1px solid var(--border);}
+.tistable .key-index{color:var(--gold-lt);font-weight:500;}
+.tistable .stunting-row td{background:rgba(248,113,113,.06);}
 
 /* ── INTERPRETATION BOX ── */
-.ibox{background:var(--navy-3);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:14px;padding:1.1rem 1.3rem;margin-bottom:1rem;}
-.ibox-title{font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:.8rem;}
-.irow{display:flex;align-items:center;gap:.7rem;padding:.45rem .6rem;border-radius:8px;margin-bottom:.3rem;font-size:.86rem;}
+.ibox{background:var(--navy-3);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:14px;padding:1rem 1.2rem;margin-bottom:.9rem;}
+.ibox-title{font-size:.64rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:.7rem;}
+.irow{display:flex;align-items:center;gap:.7rem;padding:.4rem .5rem;border-radius:8px;margin-bottom:.25rem;font-size:.85rem;}
 .irow.active{border:1px solid;}
-.irow-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.irow-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
 
 /* ── RECOMMENDATION BOX ── */
-.recbox{background:var(--navy-3);border:1px solid var(--border);border-left:3px solid;border-radius:14px;padding:1.1rem 1.3rem;font-size:.87rem;line-height:1.7;color:var(--text-2);margin-bottom:1rem;}
+.recbox{background:var(--navy-3);border:1px solid var(--border);border-left:3px solid;border-radius:14px;padding:1rem 1.2rem;font-size:.86rem;line-height:1.7;color:var(--text-2);margin-bottom:.9rem;}
 .recbox .acc{font-weight:500;}
-.recbox .disc{font-size:.76rem;color:var(--text-3);margin-top:.6rem;font-style:italic;}
-.rec-item{display:flex;align-items:flex-start;gap:.5rem;margin:.25rem 0;}
-.rec-item::before{content:'→';color:var(--gold);flex-shrink:0;font-size:.9rem;}
+.recbox .disc{font-size:.74rem;color:var(--text-3);margin-top:.5rem;font-style:italic;}
+.rec-item{display:flex;align-items:flex-start;gap:.5rem;margin:.22rem 0;}
+.rec-item::before{content:'→';color:var(--gold);flex-shrink:0;font-size:.88rem;}
 
 /* ── CONFIDENCE BADGE ── */
-.conf-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:100px;border:1px solid;font-size:.8rem;font-weight:500;margin-bottom:1rem;}
+.conf-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .9rem;border-radius:100px;border:1px solid;font-size:.78rem;font-weight:500;margin-bottom:.8rem;}
+
+/* ── TRACKING CARD ── */
+.track-card{background:var(--navy-3);border:1px solid var(--border);border-radius:14px;padding:1.1rem;margin-bottom:.7rem;display:flex;align-items:center;gap:1rem;transition:border-color .2s;}
+.track-card:hover{border-color:var(--border-gold);}
+.track-date{font-size:.7rem;color:var(--text-3);min-width:70px;}
+.track-vals{flex:1;display:flex;gap:1.2rem;flex-wrap:wrap;}
+.track-val{text-align:center;}
+.track-val-num{font-family:'Cormorant Garamond',serif;font-size:1.2rem;color:var(--text-1);line-height:1;}
+.track-val-lbl{font-size:.62rem;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase;}
+.track-prob{min-width:60px;text-align:right;}
 
 /* ── HISTORY TABLE ── */
 .hist-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--border);}
 .hist-wrap table{width:100%;border-collapse:collapse;font-size:.83rem;}
-.hist-wrap th{background:var(--navy-4);color:var(--text-3);font-weight:500;padding:.7rem 1rem;text-align:left;letter-spacing:.05em;font-size:.72rem;text-transform:uppercase;}
-.hist-wrap td{padding:.65rem 1rem;border-bottom:1px solid var(--border);color:var(--text-2);}
+.hist-wrap th{background:var(--navy-4);color:var(--text-3);font-weight:500;padding:.65rem .9rem;text-align:left;letter-spacing:.05em;font-size:.7rem;text-transform:uppercase;}
+.hist-wrap td{padding:.6rem .9rem;border-bottom:1px solid var(--border);color:var(--text-2);}
 .hist-wrap tr:last-child td{border-bottom:none;}
 .hist-wrap tr:hover td{background:rgba(255,255,255,.02);}
-
-/* ── ABOUT PAGE ── */
-.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;}
-.stat-box{background:var(--navy-3);border:1px solid var(--border);border-radius:14px;padding:1.2rem;text-align:center;}
-.stat-val{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:300;color:var(--gold-lt);}
-.stat-lbl{font-size:.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-top:.2rem;}
 
 /* ── ALERTS ── */
 div[data-testid="stAlert"]{background:rgba(201,168,76,.08)!important;border:1px solid var(--border-gold)!important;border-radius:12px!important;color:var(--gold-lt)!important;font-family:'Outfit',sans-serif!important;}
@@ -223,7 +226,7 @@ div[data-testid="stTabs"] [role="tab"]{
     background:transparent!important; border:none!important;
     color:var(--text-3)!important; font-family:'Outfit',sans-serif!important;
     font-size:.82rem!important; font-weight:500!important;
-    padding:.55rem 1rem!important; border-radius:8px 8px 0 0!important;
+    padding:.5rem .9rem!important; border-radius:8px 8px 0 0!important;
     letter-spacing:.03em!important;
 }
 div[data-testid="stTabs"] [role="tab"][aria-selected="true"]{
@@ -232,22 +235,22 @@ div[data-testid="stTabs"] [role="tab"][aria-selected="true"]{
 }
 div[data-testid="stTabs"] [role="tab"]:hover{color:var(--text-1)!important;background:rgba(255,255,255,.04)!important;}
 
+/* ── PREMATURE TAG ── */
+.prem-tag{display:inline-flex;align-items:center;gap:.35rem;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:#a78bfa;font-size:.73rem;font-weight:500;padding:.28rem .75rem;border-radius:100px;}
+
 /* ── FOOTER ── */
-.fnote{text-align:center;color:var(--text-3);font-size:.73rem;line-height:1.9;padding-top:1.5rem;margin-top:2.5rem;border-top:1px solid var(--border);}
+.fnote{text-align:center;color:var(--text-3);font-size:.72rem;line-height:1.9;padding-top:1.2rem;margin-top:2rem;border-top:1px solid var(--border);}
 .fnote span{color:var(--text-2);}
 
-/* ── MATPLOTLIB DARK ── */
-.stPlotlyChart,.element-container [data-testid="stImage"]{border-radius:14px;overflow:hidden;}
-
 /* ── ANIMATIONS ── */
-@keyframes fadeDown{from{opacity:0;transform:translateY(-16px);}to{opacity:1;transform:translateY(0);}}
-@keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
-@keyframes resultPop{from{opacity:0;transform:scale(.93);}to{opacity:1;transform:scale(1);}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-14px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+@keyframes resultPop{from{opacity:0;transform:scale(.94);}to{opacity:1;transform:scale(1);}}
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# WHO LMS TABLES (reused from earlier version)
+# WHO LMS TABLES — BB/U
 # ─────────────────────────────────────────────
 WFA_BOYS = [
     [0,0.3487,3.3464,0.14602],[1,0.2297,4.4709,0.13395],[2,0.1970,5.5675,0.12385],
@@ -267,6 +270,10 @@ WFA_GIRLS = [
     [42,-0.1802,15.0021,0.14441],[48,-0.1995,16.0586,0.14910],[54,-0.2163,17.1305,0.15331],
     [60,-0.2308,18.2298,0.15705]
 ]
+
+# ─────────────────────────────────────────────
+# WHO LMS TABLES — BB/TB (Wasting)
+# ─────────────────────────────────────────────
 WFL_BOYS = [
     [45.0,-0.3521,2.441,0.09182],[50.0,-0.3521,3.223,0.08221],[55.0,-0.3521,4.313,0.07654],
     [60.0,-0.3521,5.625,0.07495],[65.0,-0.3521,6.942,0.07651],[70.0,-0.3521,8.102,0.08058],
@@ -282,8 +289,10 @@ WFL_GIRLS = [
     [105.0,-0.3833,13.140,0.11447],[110.0,-0.3833,14.093,0.12490]
 ]
 
-# WHO Height-for-Age median & SD (simplified, boys/girls)
+# ─────────────────────────────────────────────
+# WHO SD TABLES — TB/U (Stunting indicator)
 # [age_months, -3SD, -2SD, median, +2SD, +3SD]
+# ─────────────────────────────────────────────
 HFA_BOYS = [
     [0,43.6,46.1,49.9,53.7,56.2],[3,55.3,57.6,61.4,65.2,67.6],[6,61.7,64.2,67.6,71.6,74.0],
     [9,66.5,68.9,72.3,76.5,78.9],[12,70.5,73.1,75.7,80.5,83.0],[18,75.7,78.8,82.3,86.8,89.9],
@@ -300,7 +309,7 @@ HFA_GIRLS = [
 ]
 
 # ─────────────────────────────────────────────
-# FEATURE IMPORTANCE (from training notebook)
+# FEATURE IMPORTANCE (from training)
 # ─────────────────────────────────────────────
 FEATURE_IMPORTANCE = [
     ("Z-Score BB/TB (Wasting Index)",    18.4),
@@ -320,16 +329,8 @@ FEATURE_IMPORTANCE = [
     ("Window 1000 HPK",                   1.9),
 ]
 
-MODEL_METRICS = {
-    "Accuracy":  0.927,
-    "Precision": 0.914,
-    "Recall":    0.903,
-    "F1-Score":  0.908,
-    "AUC-ROC":   0.963,
-}
-
 # ─────────────────────────────────────────────
-# WHO Z-SCORE FUNCTIONS
+# Z-SCORE FUNCTIONS
 # ─────────────────────────────────────────────
 def lms_zscore(X, L, M, S):
     if L == 0:
@@ -339,51 +340,82 @@ def lms_zscore(X, L, M, S):
     if z > 3:
         SD3pos  = M * (1 + L*S*3)**(1/L)
         SD23pos = SD3pos - M*(1+L*S*2)**(1/L)
-        z = 3 + (X - SD3pos)/SD23pos
+        z = 3 + (X - SD3pos)/SD23pos if SD23pos != 0 else 3
     elif z < -3:
         SD3neg  = M * (1+L*S*(-3))**(1/L)
         SD23neg = M*(1+L*S*(-2))**(1/L) - SD3neg
-        z = -3 + (X - SD3neg)/SD23neg
+        z = -3 + (X - SD3neg)/SD23neg if SD23neg != 0 else -3
     return round(z, 2)
 
-def get_lms_age(age, sex):
-    table = WFA_BOYS if sex=='L' else WFA_GIRLS
-    ages  = [r[0] for r in table]
+def _interp_lms_age(age, table):
+    ages = [r[0] for r in table]
     a = max(0, min(60, int(round(age))))
     idx = bisect.bisect_left(ages, a)
     if idx >= len(table): idx = len(table)-1
     elif idx > 0 and ages[idx] != a:
-        a0,a1 = ages[idx-1], ages[idx]
+        a0, a1 = ages[idx-1], ages[idx]
         t = (a-a0)/(a1-a0) if a1!=a0 else 0
-        return (table[idx-1][1]+t*(table[idx][1]-table[idx-1][1]),
-                table[idx-1][2]+t*(table[idx][2]-table[idx-1][2]),
-                table[idx-1][3]+t*(table[idx][3]-table[idx-1][3]))
+        return tuple(table[idx-1][i]+t*(table[idx][i]-table[idx-1][i]) for i in range(1,4))
     return table[idx][1], table[idx][2], table[idx][3]
 
-def get_lms_height(h, sex):
-    table = WFL_BOYS if sex=='L' else WFL_GIRLS
+def _interp_lms_height(h, table):
     hs = [r[0] for r in table]
     h  = max(hs[0], min(hs[-1], h))
     idx = bisect.bisect_left(hs, h)
     if idx >= len(table): idx = len(table)-1
     elif idx > 0:
-        h0,h1 = hs[idx-1], hs[idx]
+        h0, h1 = hs[idx-1], hs[idx]
         t = (h-h0)/(h1-h0) if h1!=h0 else 0
-        return (table[idx-1][1]+t*(table[idx][1]-table[idx-1][1]),
-                table[idx-1][2]+t*(table[idx][2]-table[idx-1][2]),
-                table[idx-1][3]+t*(table[idx][3]-table[idx-1][3]))
+        return tuple(table[idx-1][i]+t*(table[idx][i]-table[idx-1][i]) for i in range(1,4))
     return table[idx][1], table[idx][2], table[idx][3]
 
+def _interp_hfa(age, table):
+    """Returns (s3n, s2n, median, s2p, s3p) for given age by interpolation."""
+    ages = [r[0] for r in table]
+    a    = max(0, min(60, age))
+    idx  = bisect.bisect_left(ages, a)
+    if idx >= len(table): idx = len(table)-1
+    elif idx > 0 and ages[idx] != a:
+        a0, a1 = ages[idx-1], ages[idx]
+        t = (a-a0)/(a1-a0) if a1!=a0 else 0
+        return tuple(table[idx-1][i]+t*(table[idx][i]-table[idx-1][i]) for i in range(1,6))
+    return tuple(table[idx][1:6])
+
 def zscore_bbu(weight, age, sex):
-    L,M,S = get_lms_age(age, sex)
+    L, M, S = _interp_lms_age(age, WFA_BOYS if sex=='L' else WFA_GIRLS)
     return lms_zscore(weight, L, M, S)
 
 def zscore_bbtb(weight, h, sex, cara, age):
     hh = h
     if cara=='Terlentang' and age>=24: hh = h - 0.7
     elif cara=='Berdiri' and age<24:   hh = h + 0.7
-    L,M,S = get_lms_height(hh, sex)
+    L, M, S = _interp_lms_height(hh, WFL_BOYS if sex=='L' else WFL_GIRLS)
     return lms_zscore(weight, L, M, S)
+
+def zscore_tbu(height, age, sex):
+    """TB/U z-score (Stunting indicator) using WHO SD table method."""
+    s3n, s2n, med, s2p, s3p = _interp_hfa(age, HFA_BOYS if sex=='L' else HFA_GIRLS)
+    if height >= med:
+        sd_pos = (s2p - med) / 2
+        z = (height - med) / sd_pos if sd_pos > 0 else 0
+        if z > 3:
+            sd23 = s3p - s2p
+            z = 3 + (height - s3p) / sd23 if sd23 > 0 else 3
+    else:
+        sd_neg = (med - s2n) / 2
+        z = (height - med) / sd_neg if sd_neg > 0 else 0
+        if z < -3:
+            sd23 = s2n - s3n
+            z = -3 - (s3n - height) / sd23 if sd23 > 0 else -3
+    return round(z, 2)
+
+def zscore_to_percentile(z):
+    """Convert Z-score to approximate WHO percentile."""
+    return round(stats_scipy.norm.cdf(z) * 100, 1)
+
+def median_tbu(age, sex):
+    _, _, med, _, _ = _interp_hfa(age, HFA_BOYS if sex=='L' else HFA_GIRLS)
+    return round(med, 1)
 
 # ─────────────────────────────────────────────
 # FEATURE ENGINEERING
@@ -465,7 +497,7 @@ def build_features(umur_bulan, jk, berat, tinggi, cara_ukur):
     return df.replace([np.inf,-np.inf], np.nan).fillna(0), zs_bb_u, zs_bb_tb
 
 # ─────────────────────────────────────────────
-# RISK TIER HELPER
+# STYLE HELPERS
 # ─────────────────────────────────────────────
 def risk_tier(pct):
     if pct < 45:
@@ -477,7 +509,7 @@ def risk_tier(pct):
                 "Pertahankan asupan gizi seimbang dan ASI/MPASI sesuai usia",
                 "Lakukan pemantauan rutin di posyandu setiap bulan",
                 "Pastikan jadwal imunisasi lengkap dan terpenuhi",
-                "Stimulasi tumbuh kembang dengan bermain aktif",
+                "Stimulasi tumbuh kembang dengan bermain aktif dan interaktif",
             ]
         )
     elif pct < 65:
@@ -486,10 +518,10 @@ def risk_tier(pct):
             color="#facc15", eyebrow="Status Pertumbuhan · Perlu Perhatian",
             level="Sedang-Rendah", badge_bg="rgba(250,204,21,.15)", badge_col="#facc15",
             recs=[
-                "Konsultasikan ke petugas gizi atau bidan untuk evaluasi",
-                "Pastikan kecukupan asupan protein, zat besi, dan zinc",
-                "Pantau berat dan tinggi badan setiap bulan",
-                "Perhatikan pola makan dan jadwal makan anak",
+                "Konsultasikan ke petugas gizi atau bidan untuk evaluasi menyeluruh",
+                "Pastikan kecukupan asupan protein hewani, zat besi, dan zinc",
+                "Pantau berat dan tinggi badan setiap bulan secara konsisten",
+                "Perhatikan diversifikasi pola makan dan jadwal makan anak",
             ]
         )
     elif pct < 80:
@@ -498,10 +530,10 @@ def risk_tier(pct):
             color="#fb923c", eyebrow="Perhatian · Intervensi Gizi Dianjurkan",
             level="Sedang-Tinggi", badge_bg="rgba(251,146,60,.15)", badge_col="#fb923c",
             recs=[
-                "Segera konsultasikan ke dokter atau ahli gizi anak",
-                "Evaluasi pola makan, asupan kalori dan protein harian",
-                "Pertimbangkan suplemen gizi mikro (vitamin A, zinc, zat besi)",
-                "Pemantauan pertumbuhan setiap 2 minggu",
+                "Segera konsultasikan ke dokter atau ahli gizi anak terdekat",
+                "Evaluasi pola makan, asupan kalori dan protein harian secara detail",
+                "Pertimbangkan suplemen gizi mikro: vitamin A, zinc, dan zat besi",
+                "Pemantauan pertumbuhan setiap 2 minggu hingga kondisi membaik",
             ]
         )
     else:
@@ -510,10 +542,10 @@ def risk_tier(pct):
             color="#f87171", eyebrow="Perhatian · Tindak Lanjut Segera",
             level="Tinggi", badge_bg="rgba(248,113,113,.15)", badge_col="#f87171",
             recs=[
-                "Bawa ke puskesmas atau dokter spesialis anak segera",
-                "Diperlukan intervensi gizi intensif dan terstruktur",
-                "Evaluasi faktor penyebab: infeksi berulang, MPASI tidak adekuat",
-                "Pemantauan pertumbuhan setiap minggu selama intervensi",
+                "Bawa ke puskesmas atau dokter spesialis anak segera hari ini",
+                "Diperlukan intervensi gizi intensif, terstruktur, dan berkelanjutan",
+                "Evaluasi faktor penyebab: infeksi berulang, MPASI tidak adekuat, BBLR",
+                "Pemantauan pertumbuhan setiap minggu selama program intervensi",
             ]
         )
 
@@ -530,6 +562,13 @@ def bbtb_style(z):
     if z<=2: return "Risiko Lebih","#facc15","rgba(250,204,21,.14)"
     if z<=3: return "Gizi Lebih","#f97316","rgba(249,115,22,.14)"
     return "Obesitas","#ef4444","rgba(239,68,68,.14)"
+
+def tbu_style(z):
+    """TB/U — Stunting status per Permenkes No. 2 / 2020."""
+    if z < -3: return "Sangat Pendek","#f87171","rgba(248,113,113,.14)","Severely Stunted"
+    if z < -2: return "Pendek","#fb923c","rgba(251,146,60,.14)","Stunted"
+    if z <= 3: return "Normal","#34d399","rgba(52,211,153,.14)","Normal"
+    return "Tinggi","#4fd1c5","rgba(79,209,197,.14)","Tall"
 
 # ─────────────────────────────────────────────
 # MODEL LOADER
@@ -567,27 +606,22 @@ def load_model():
 # ─────────────────────────────────────────────
 def validate_inputs(umur, berat, tinggi, jk):
     warnings = []
-    # Berat realistis per usia
     berat_min = {0:2.0,6:5.5,12:7.0,24:9.0,36:11.0,48:13.0,60:15.0}
     berat_max = {0:5.5,6:10.5,12:14.0,24:17.0,36:20.0,48:23.0,60:27.0}
     for k in sorted(berat_min.keys()):
-        if umur >= k:
-            bmin, bmax = berat_min[k], berat_max[k]
+        if umur >= k: bmin, bmax = berat_min[k], berat_max[k]
     if berat < bmin:
-        warnings.append(f"⚠️ Berat badan {berat} kg terlalu rendah untuk usia {umur} bulan (min ~{bmin} kg)")
+        warnings.append(f"⚠️ BB {berat} kg kemungkinan terlalu rendah untuk usia {umur} bln (min ~{bmin} kg)")
     if berat > bmax:
-        warnings.append(f"⚠️ Berat badan {berat} kg terlalu tinggi untuk usia {umur} bulan (maks ~{bmax} kg)")
-    # Tinggi realistis per usia
+        warnings.append(f"⚠️ BB {berat} kg kemungkinan terlalu tinggi untuk usia {umur} bln (maks ~{bmax} kg)")
     tinggi_min = {0:44,6:60,12:68,24:78,36:86,48:93,60:100}
     tinggi_max = {0:57,6:74,12:84,24:97,36:107,48:116,60:123}
     for k in sorted(tinggi_min.keys()):
-        if umur >= k:
-            tmin, tmax = tinggi_min[k], tinggi_max[k]
+        if umur >= k: tmin, tmax = tinggi_min[k], tinggi_max[k]
     if tinggi < tmin:
-        warnings.append(f"⚠️ Tinggi/panjang {tinggi} cm tidak realistis untuk usia {umur} bulan (min ~{tmin} cm)")
+        warnings.append(f"⚠️ TB {tinggi} cm tidak realistis untuk usia {umur} bln (min ~{tmin} cm)")
     if tinggi > tmax:
-        warnings.append(f"⚠️ Tinggi/panjang {tinggi} cm tidak realistis untuk usia {umur} bulan (maks ~{tmax} cm)")
-    # BMI check
+        warnings.append(f"⚠️ TB {tinggi} cm tidak realistis untuk usia {umur} bln (maks ~{tmax} cm)")
     bmi = berat / (tinggi/100)**2
     if bmi < 10: warnings.append("⚠️ BMI sangat rendah — periksa kembali data berat dan tinggi")
     if bmi > 30: warnings.append("⚠️ BMI sangat tinggi — periksa kembali data berat dan tinggi")
@@ -597,11 +631,11 @@ def validate_inputs(umur, berat, tinggi, jk):
 # WHO GROWTH CHART
 # ─────────────────────────────────────────────
 def plot_growth_chart(umur, tinggi, berat, sex):
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5.5))
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5.2))
     fig.patch.set_facecolor("#1a2535")
     for ax in axes:
         ax.set_facecolor("#111827")
-        ax.tick_params(colors="#64748b", labelsize=9)
+        ax.tick_params(colors="#64748b", labelsize=8.5)
         ax.spines['bottom'].set_color("#1f2d42")
         ax.spines['left'].set_color("#1f2d42")
         ax.spines['top'].set_visible(False)
@@ -623,21 +657,25 @@ def plot_growth_chart(umur, tinggi, berat, sex):
     ax.plot(ages_hfa, s2pos, "--", color="#facc15", lw=1.2, alpha=.7, label="+2 SD")
     ax.plot(ages_hfa, s3pos, "--", color="#f87171", lw=1.2, alpha=.7, label="+3 SD")
     ax.scatter([umur], [tinggi], color="#c9a84c", s=90, zorder=5, label="Anak ini")
-    ax.axvline(x=umur, color="#c9a84c", lw=0.8, linestyle=":", alpha=.6)
-    ax.axhline(y=tinggi, color="#c9a84c", lw=0.8, linestyle=":", alpha=.6)
+    ax.axvline(x=umur,  color="#c9a84c", lw=0.8, linestyle=":", alpha=.5)
+    ax.axhline(y=tinggi,color="#c9a84c", lw=0.8, linestyle=":", alpha=.5)
     ax.set_xlabel("Umur (Bulan)", color="#94a3b8", fontsize=9)
     ax.set_ylabel("Tinggi/Panjang Badan (cm)", color="#94a3b8", fontsize=9)
-    ax.set_title(f"Tinggi Badan / Umur  ·  {'Laki-laki' if sex=='L' else 'Perempuan'}",
+    ax.set_title(f"TB/U — Tinggi menurut Umur · {'L' if sex=='L' else 'P'}",
                  color="#e8d48b", fontsize=10, fontweight='normal', pad=10)
-    ax.legend(fontsize=8, facecolor="#1a2535", edgecolor="#1f2d42",
-              labelcolor="#94a3b8", loc="upper left")
+    p1 = mpatches.Patch(facecolor="#34d399", alpha=.3, label="Normal (−2 s.d. +2 SD)")
+    p2 = mpatches.Patch(facecolor="#facc15", alpha=.3, label="Borderline (±2~±3 SD)")
+    p3 = mpatches.Patch(facecolor="#f87171", alpha=.3, label="Kritis (< −3 SD)")
+    ax.legend(handles=[p1,p2,p3,
+        plt.Line2D([0],[0],marker='o',color='w',markerfacecolor='#c9a84c',markersize=7,label='Posisi Anak')],
+        fontsize=7.5, facecolor="#1a2535", edgecolor="#1f2d42",
+        labelcolor="#94a3b8", loc="upper left")
 
-    # Weight-for-age
+    # BB/U chart
     wfa = WFA_BOYS if sex=="L" else WFA_GIRLS
     ages_w = [r[0] for r in wfa]
     meds_w = [r[2] for r in wfa]
-    # approximate -2SD and +2SD from LMS
-    s2n_w = []; s2p_w = []; s3n_w = []; s3p_w = []
+    s2n_w=[]; s2p_w=[]; s3n_w=[]; s3p_w=[]
     for row in wfa:
         L,M,S = row[1],row[2],row[3]
         s2n_w.append(M*(1+L*S*(-2))**(1/L) if L!=0 else M*np.exp(-2*S))
@@ -655,74 +693,93 @@ def plot_growth_chart(umur, tinggi, berat, sex):
     ax2.plot(ages_w, s2p_w, "--", color="#facc15", lw=1.2, alpha=.7, label="+2 SD")
     ax2.plot(ages_w, s3p_w, "--", color="#f87171", lw=1.2, alpha=.7, label="+3 SD")
     ax2.scatter([umur], [berat], color="#c9a84c", s=90, zorder=5, label="Anak ini")
-    ax2.axvline(x=umur, color="#c9a84c", lw=0.8, linestyle=":", alpha=.6)
-    ax2.axhline(y=berat, color="#c9a84c", lw=0.8, linestyle=":", alpha=.6)
+    ax2.axvline(x=umur,  color="#c9a84c", lw=0.8, linestyle=":", alpha=.5)
+    ax2.axhline(y=berat, color="#c9a84c", lw=0.8, linestyle=":", alpha=.5)
     ax2.set_xlabel("Umur (Bulan)", color="#94a3b8", fontsize=9)
     ax2.set_ylabel("Berat Badan (kg)", color="#94a3b8", fontsize=9)
-    ax2.set_title(f"Berat Badan / Umur  ·  {'Laki-laki' if sex=='L' else 'Perempuan'}",
+    ax2.set_title(f"BB/U — Berat menurut Umur · {'L' if sex=='L' else 'P'}",
                   color="#e8d48b", fontsize=10, fontweight='normal', pad=10)
-    ax2.legend(fontsize=8, facecolor="#1a2535", edgecolor="#1f2d42",
-               labelcolor="#94a3b8", loc="upper left")
-
-    # legend patch for zones
-    p1 = mpatches.Patch(facecolor="#34d399", alpha=.3, label="Normal (−2 s.d. +2 SD)")
-    p2 = mpatches.Patch(facecolor="#facc15", alpha=.3, label="Borderline (−3 s.d. −2 SD)")
-    p3 = mpatches.Patch(facecolor="#f87171", alpha=.3, label="Kritis (< −3 SD)")
-    for ax in axes:
-        ax.legend(handles=[p1,p2,p3,
-            plt.Line2D([0],[0],marker='o',color='w',markerfacecolor='#c9a84c',markersize=7,label='Posisi Anak')],
-            fontsize=7.5, facecolor="#1a2535", edgecolor="#1f2d42",
-            labelcolor="#94a3b8", loc="upper left")
+    ax2.legend(handles=[p1,p2,p3,
+        plt.Line2D([0],[0],marker='o',color='w',markerfacecolor='#c9a84c',markersize=7,label='Posisi Anak')],
+        fontsize=7.5, facecolor="#1a2535", edgecolor="#1f2d42",
+        labelcolor="#94a3b8", loc="upper left")
 
     plt.tight_layout(pad=2.5)
     return fig
 
-# ─────────────────────────────────────────────
-# FEATURE IMPORTANCE CHART
-# ─────────────────────────────────────────────
-def plot_feature_importance():
-    feats = FEATURE_IMPORTANCE[:12]
-    names = [f[0] for f in feats]
-    vals  = [f[1] for f in feats]
-    colors = []
-    for v in vals:
-        if v >= 12:   colors.append("#c9a84c")
-        elif v >= 7:  colors.append("#4fd1c5")
-        elif v >= 4:  colors.append("#94a3b8")
-        else:         colors.append("#475569")
+def plot_tracking_chart(records, sex):
+    """Plot growth trajectory for a child with multiple measurements."""
+    if len(records) < 2:
+        return None
+    dates  = [r["umur"] for r in records]
+    berats = [r["berat"] for r in records]
+    tinggis= [r["tinggi"] for r in records]
+    probs  = [r["prob"] for r in records]
 
-    fig, ax = plt.subplots(figsize=(9, 5.5))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
     fig.patch.set_facecolor("#1a2535")
-    ax.set_facecolor("#111827")
 
-    bars = ax.barh(names[::-1], vals[::-1], color=colors[::-1],
-                   height=0.62, edgecolor="none")
-    for bar, val in zip(bars, vals[::-1]):
-        ax.text(bar.get_width()+0.2, bar.get_y()+bar.get_height()/2,
-                f"{val:.1f}%", va='center', ha='left',
-                color="#94a3b8", fontsize=8.5)
+    titles = ["Berat Badan (kg)", "Tinggi/Panjang (cm)", "Probabilitas Stunting (%)"]
+    data_sets = [berats, tinggis, probs]
+    colors = ["#4fd1c5", "#c9a84c", "#f87171"]
 
-    ax.set_xlabel("Kontribusi (%)", color="#64748b", fontsize=9)
-    ax.set_title("Feature Importance — Faktor Penentu Prediksi",
-                 color="#e8d48b", fontsize=11, fontweight='normal', pad=12)
-    ax.tick_params(colors="#64748b", labelsize=8.5)
-    ax.spines['bottom'].set_color("#1f2d42")
-    ax.spines['left'].set_color("#1f2d42")
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.set_xlim(0, max(vals)+4)
-    ax.grid(axis='x', color="#1f2d42", linestyle="--", linewidth=0.7, alpha=0.8)
+    for i, (ax, vals, title, col) in enumerate(zip(axes, data_sets, titles, colors)):
+        ax.set_facecolor("#111827")
+        ax.tick_params(colors="#64748b", labelsize=8.5)
+        for sp in ['bottom','left']: ax.spines[sp].set_color("#1f2d42")
+        for sp in ['top','right']:   ax.spines[sp].set_visible(False)
+        ax.grid(color="#1f2d42", linestyle="--", linewidth=0.7, alpha=0.7)
+        ax.plot(dates, vals, "-o", color=col, lw=2.2, markersize=6, zorder=3)
+        ax.fill_between(dates, vals, alpha=0.12, color=col)
+        # annotate last point
+        ax.annotate(f"{vals[-1]:.1f}", (dates[-1], vals[-1]),
+                    textcoords="offset points", xytext=(5, 5),
+                    color=col, fontsize=8.5, fontweight='600')
+        if i == 2:  # prob chart
+            ax.axhline(45, color="#facc15", lw=1, linestyle="--", alpha=.6, label="Batas 45%")
+            ax.axhspan(0, 45, alpha=.04, color="#34d399")
+            ax.axhspan(45, 100, alpha=.04, color="#f87171")
+            ax.set_ylim(0, 100)
+            ax.legend(fontsize=7.5, facecolor="#1a2535", edgecolor="#1f2d42", labelcolor="#94a3b8")
+        ax.set_xlabel("Umur (Bulan)", color="#94a3b8", fontsize=8.5)
+        ax.set_title(title, color="#e8d48b", fontsize=9.5, fontweight='normal', pad=8)
 
     plt.tight_layout(pad=2)
     return fig
 
+def plot_feature_importance():
+    feats = FEATURE_IMPORTANCE[:12]
+    names = [f[0] for f in feats]
+    vals  = [f[1] for f in feats]
+    colors = ["#c9a84c" if v>=12 else ("#4fd1c5" if v>=7 else ("#94a3b8" if v>=4 else "#475569")) for v in vals]
+
+    fig, ax = plt.subplots(figsize=(9, 5.2))
+    fig.patch.set_facecolor("#1a2535")
+    ax.set_facecolor("#111827")
+    bars = ax.barh(names[::-1], vals[::-1], color=colors[::-1], height=0.62, edgecolor="none")
+    for bar, val in zip(bars, vals[::-1]):
+        ax.text(bar.get_width()+0.2, bar.get_y()+bar.get_height()/2,
+                f"{val:.1f}%", va='center', ha='left', color="#94a3b8", fontsize=8.5)
+    ax.set_xlabel("Kontribusi (%)", color="#64748b", fontsize=9)
+    ax.set_title("Feature Importance — Faktor Penentu Prediksi",
+                 color="#e8d48b", fontsize=11, fontweight='normal', pad=12)
+    ax.tick_params(colors="#64748b", labelsize=8.5)
+    for sp in ['bottom','left']: ax.spines[sp].set_color("#1f2d42")
+    for sp in ['top','right']:   ax.spines[sp].set_visible(False)
+    ax.set_xlim(0, max(vals)+4)
+    ax.grid(axis='x', color="#1f2d42", linestyle="--", linewidth=0.7, alpha=0.8)
+    plt.tight_layout(pad=2)
+    return fig
+
 # ─────────────────────────────────────────────
-# SESSION STATE INIT
+# SESSION STATE
 # ─────────────────────────────────────────────
 if "history" not in st.session_state:
     st.session_state.history = []
 if "last_result" not in st.session_state:
     st.session_state.last_result = None
+if "tracking" not in st.session_state:
+    st.session_state.tracking = {}   # {nama: [records]}
 
 # ─────────────────────────────────────────────
 # SIDEBAR NAVIGATION
@@ -730,12 +787,12 @@ if "last_result" not in st.session_state:
 with st.sidebar:
     st.markdown("""
     <div style='text-align:center;padding:1.2rem 0 1.5rem;'>
-        <div style='font-size:2rem;margin-bottom:.4rem;'>🌿</div>
-        <div style='font-family:"Cormorant Garamond",serif;font-size:1.2rem;color:#e8d48b;font-weight:300;'>
-            Prediksi Stunting
+        <div style='font-size:1.8rem;margin-bottom:.3rem;'>🌿</div>
+        <div style='font-family:"Cormorant Garamond",serif;font-size:1.15rem;color:#e8d48b;font-weight:300;'>
+            SkriningGizi
         </div>
-        <div style='font-size:.7rem;color:#475569;letter-spacing:.1em;text-transform:uppercase;margin-top:.2rem;'>
-            Balita · AI System
+        <div style='font-size:.68rem;color:#475569;letter-spacing:.1em;text-transform:uppercase;margin-top:.15rem;'>
+            Sistem Prediksi Stunting Balita
         </div>
     </div>
     <hr style='border:none;border-top:1px solid rgba(201,168,76,.2);margin-bottom:1.2rem;'>
@@ -743,156 +800,204 @@ with st.sidebar:
 
     menu = st.radio(
         "Navigasi",
-        ["🏠  Prediksi Tunggal",
-         "📊  Grafik Pertumbuhan",
-         "🧬  Feature Importance",
-         "⚡  Simulasi Risiko",
+        ["🏠  Prediksi & Analisis",
+         "📈  Rekam Tumbuh Kembang",
+         "📊  Grafik Pertumbuhan WHO",
+         "🧬  Analisis Fitur",
+         "⚡  Simulasi Intervensi",
          "📋  Riwayat Prediksi",
-         "📁  Prediksi Batch (Excel)",
-         "📚  Tentang Model"],
+         "📁  Prediksi Batch (Excel)"],
         label_visibility="collapsed"
     )
 
     st.markdown("""
     <hr style='border:none;border-top:1px solid rgba(255,255,255,.06);margin:1.5rem 0 .8rem;'>
-    <div style='font-size:.7rem;color:#334155;text-align:center;line-height:1.7;'>
-        Permenkes No. 2 / 2020<br>WHO 2006 Growth Standards<br>
+    <div style='font-size:.68rem;color:#334155;text-align:center;line-height:1.8;'>
+        WHO 2006 Growth Standards<br>
+        Permenkes No. 2 / 2020<br>
         Ensemble CatBoost + XGBoost
     </div>
     """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# HERO (always shown)
+# TOP BAR (replaces elaborate hero)
 # ─────────────────────────────────────────────
 st.markdown("""
-<div class="hero-wrap">
-    <div class="hero-badge">🌿 &nbsp; Sistem Skrining AI · Permenkes No. 2 Tahun 2020</div>
-    <h1 class="hero-title">Prediksi <em>Stunting</em> Balita</h1>
-    <div class="hero-divider"></div>
-    <p class="hero-sub">
-        Analisis antropometri berbasis WHO 2006 Growth Standards
-        &nbsp;·&nbsp; Ensemble CatBoost + XGBoost &nbsp;·&nbsp; Feature Engineering 70+ Variabel
-    </p>
+<div class="topbar">
+    <div class="topbar-icon">🌿</div>
+    <div>
+        <div class="topbar-title">SkriningGizi · Prediksi <em>Stunting</em> Balita</div>
+        <div class="topbar-sub">
+            WHO 2006 · Permenkes No. 2 Tahun 2020 · Ensemble CatBoost + XGBoost · 70+ Fitur
+        </div>
+    </div>
+    <div class="topbar-right">
+        <span class="topbar-badge">AI Screening System</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE 1 — PREDIKSI TUNGGAL
+# PAGE 1 — PREDIKSI & ANALISIS (ENHANCED)
 # ═══════════════════════════════════════════════════════════════
 if menu.startswith("🏠"):
     st.markdown('<p class="slabel">Data Antropometri Anak</p>', unsafe_allow_html=True)
 
+    # ── INPUT FORM
     col1, col2, col3 = st.columns(3)
     with col1:
-        umur_bulan   = st.number_input("Umur (Bulan)", 0, 60, 24, 1)
-        berat        = st.number_input("Berat Badan (kg)", 1.0, 35.0, 12.0, 0.1, format="%.1f")
+        umur_bulan    = st.number_input("Umur (Bulan)", 0, 60, 24, 1)
+        berat         = st.number_input("Berat Badan (kg)", 1.0, 35.0, 12.0, 0.1, format="%.1f")
     with col2:
-        tinggi       = st.number_input("Tinggi / Panjang Badan (cm)", 40.0, 130.0, 87.0, 0.1, format="%.1f")
-        jenis_kelamin= st.selectbox("Jenis Kelamin", ["Laki-laki","Perempuan"])
+        tinggi        = st.number_input("Tinggi / Panjang Badan (cm)", 40.0, 130.0, 87.0, 0.1, format="%.1f")
+        jenis_kelamin = st.selectbox("Jenis Kelamin", ["Laki-laki","Perempuan"])
     with col3:
-        cara_ukur    = st.selectbox("Cara Pengukuran",
-                                    ["Terlentang — Panjang Badan", "Berdiri — Tinggi Badan"],
-                                    help="Terlentang < 24 bln · Berdiri ≥ 24 bln")
-        nama_anak    = st.text_input("Nama Anak (opsional)", placeholder="contoh: Budi")
+        cara_ukur     = st.selectbox("Cara Pengukuran",
+                                     ["Terlentang — Panjang Badan", "Berdiri — Tinggi Badan"],
+                                     help="Terlentang < 24 bln · Berdiri ≥ 24 bln")
+        nama_anak     = st.text_input("Nama Anak (opsional)", placeholder="contoh: Budi")
 
-    # Validation warnings
+    # ── KOREKSI PREMATUR
+    with st.expander("🔧 Koreksi Usia Prematur (opsional)"):
+        prematur       = st.checkbox("Anak lahir prematur (< 37 minggu)")
+        usia_gestasi   = st.number_input("Usia gestasi saat lahir (minggu)", 24, 36, 32, 1,
+                                          disabled=not prematur)
+        if prematur:
+            koreksi_bln = round((40 - usia_gestasi) / 4.33, 1)
+            umur_terkoreksi = max(0, umur_bulan - koreksi_bln)
+            st.markdown(f"""
+            <div style="display:flex;align-items:center;gap:.6rem;margin-top:.3rem;">
+                <span class="prem-tag">🔧 Koreksi: −{koreksi_bln:.1f} bln
+                → Usia terkoreksi: <b>{umur_terkoreksi:.1f} bln</b></span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            umur_terkoreksi = umur_bulan
+
     cu_mode = "Berdiri" if cara_ukur.startswith("Berdiri") else "Terlentang"
-    jk = "L" if jenis_kelamin=="Laki-laki" else "P"
+    jk      = "L" if jenis_kelamin=="Laki-laki" else "P"
 
-    if umur_bulan < 24 and cu_mode=="Berdiri":
+    if umur_terkoreksi < 24 and cu_mode=="Berdiri":
         st.warning("Untuk usia < 24 bulan, disarankan pengukuran Terlentang (panjang badan).")
-    elif umur_bulan >= 24 and cu_mode=="Terlentang":
+    elif umur_terkoreksi >= 24 and cu_mode=="Terlentang":
         st.warning("Untuk usia ≥ 24 bulan, disarankan pengukuran Berdiri (tinggi badan).")
 
-    val_warns = validate_inputs(umur_bulan, berat, tinggi, jk)
-    for w in val_warns:
+    for w in validate_inputs(umur_terkoreksi, berat, tinggi, jk):
         st.warning(w)
 
-    st.markdown("<div style='height:.4rem'></div>", unsafe_allow_html=True)
-    predict_btn = st.button("Analisis & Prediksi Sekarang", key="predict_main")
+    st.markdown("<div style='height:.3rem'></div>", unsafe_allow_html=True)
+    predict_btn = st.button("🔍  Analisis & Prediksi Sekarang", key="predict_main")
 
     if predict_btn:
         with st.spinner("Menganalisis data antropometri..."):
             try:
                 model, threshold, _ = load_model()
-                X_input, zs_bbu, zs_bbtb = build_features(umur_bulan, jk, berat, tinggi, cu_mode)
+                X_input, zs_bbu, zs_bbtb = build_features(
+                    umur_terkoreksi, jk, berat, tinggi, cu_mode)
                 proba         = model.predict_proba(X_input)[0]
                 prob_stunting = proba[1]
                 pct           = prob_stunting * 100
                 confidence    = max(proba) * 100
+                # TB/U z-score & percentile
+                zs_tbu        = zscore_tbu(tinggi, umur_terkoreksi, jk)
+                pct_bbu       = zscore_to_percentile(zs_bbu)
+                pct_bbtb      = zscore_to_percentile(zs_bbtb)
+                pct_tbu       = zscore_to_percentile(zs_tbu)
+                med_tbu_val   = median_tbu(umur_terkoreksi, jk)
             except Exception as e:
                 st.error(f"Error saat prediksi: {e}"); st.stop()
 
         tier = risk_tier(pct)
         st.session_state.last_result = {
-            "umur": umur_bulan, "berat": berat, "tinggi": tinggi,
+            "umur": umur_terkoreksi, "umur_raw": umur_bulan,
+            "berat": berat, "tinggi": tinggi,
             "jk": jenis_kelamin, "nama": nama_anak,
             "pct": pct, "zs_bbu": zs_bbu, "zs_bbtb": zs_bbtb,
-            "tier": tier, "confidence": confidence, "cara": cu_mode
+            "zs_tbu": zs_tbu, "tier": tier, "confidence": confidence,
+            "cara": cu_mode, "pct_tbu": pct_tbu,
         }
 
         # Save to history
         st.session_state.history.append({
             "Waktu": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "Nama": nama_anak or "—",
-            "Umur (bln)": umur_bulan,
-            "BB (kg)": berat,
-            "TB (cm)": tinggi,
-            "JK": jenis_kelamin,
-            "Prob (%)": round(pct, 1),
-            "Hasil": tier["title"],
+            "Nama": nama_anak or "—", "Umur (bln)": umur_terkoreksi,
+            "BB (kg)": berat, "TB (cm)": tinggi, "JK": jenis_kelamin,
+            "ZS BB/U": round(zs_bbu,2), "ZS BB/TB": round(zs_bbtb,2),
+            "ZS TB/U": round(zs_tbu,2),
+            "Prob (%)": round(pct,1), "Hasil": tier["title"],
         })
 
-        st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
-        st.markdown('<p class="slabel">Hasil Analisis</p>', unsafe_allow_html=True)
+        # Save to tracking if nama provided
+        if nama_anak:
+            if nama_anak not in st.session_state.tracking:
+                st.session_state.tracking[nama_anak] = []
+            st.session_state.tracking[nama_anak].append({
+                "tanggal": datetime.date.today().isoformat(),
+                "umur": umur_terkoreksi, "berat": berat, "tinggi": tinggi,
+                "zs_bbu": zs_bbu, "zs_bbtb": zs_bbtb, "zs_tbu": zs_tbu,
+                "prob": pct,
+            })
+
+        st.markdown("<div style='height:.4rem'></div>", unsafe_allow_html=True)
+        st.markdown('<p class="slabel">Hasil Analisis AI</p>', unsafe_allow_html=True)
 
         # ── RESULT PANEL
-        rp = tier
         bar_pct = max(2, min(97, pct))
         st.markdown(f"""
-        <div class="rp {rp['cls']}">
-            <div class="rp-eyebrow" style="color:{rp['color']};">{rp['eyebrow']}</div>
-            <div class="rp-icon">{rp['icon']}</div>
-            <div class="rp-headline" style="color:{rp['color']};">{rp['title']}</div>
-            <div class="rp-prob">Probabilitas stunting &nbsp;—&nbsp;
-                <strong style="color:{rp['color']};font-size:1rem;">{pct:.1f}%</strong>
+        <div class="rp {tier['cls']}">
+            <div class="rp-eyebrow" style="color:{tier['color']};">{tier['eyebrow']}</div>
+            <div class="rp-icon">{tier['icon']}</div>
+            <div class="rp-headline" style="color:{tier['color']};">{tier['title']}</div>
+            <div class="rp-prob">Probabilitas stunting berdasarkan model AI &nbsp;—&nbsp;
+                <strong style="color:{tier['color']};font-size:1rem;">{pct:.1f}%</strong>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # ── CONFIDENCE SCORE
-        conf_col = "#34d399" if confidence >= 80 else ("#facc15" if confidence >= 60 else "#fb923c")
-        conf_lbl = "Tinggi" if confidence >= 80 else ("Sedang" if confidence >= 60 else "Rendah")
+        # ── CONFIDENCE
+        conf_col = "#34d399" if confidence>=80 else ("#facc15" if confidence>=60 else "#fb923c")
+        conf_lbl = "Tinggi" if confidence>=80 else ("Sedang" if confidence>=60 else "Rendah")
         st.markdown(f"""
-        <div style="text-align:center;margin:.8rem 0 1.2rem;">
+        <div style="text-align:center;margin:.6rem 0 1rem;">
             <span class="conf-badge"
                 style="background:rgba(201,168,76,.1);border-color:var(--border-gold);color:var(--gold-lt);">
                 🧠 Kepercayaan Model:
                 <strong style="color:{conf_col};">{confidence:.1f}%</strong>
-                &nbsp;<span style="color:{conf_col};font-size:.75rem;">(Keyakinan {conf_lbl})</span>
+                &nbsp;<span style="color:{conf_col};font-size:.73rem;">(Keyakinan {conf_lbl})</span>
             </span>
         </div>
         """, unsafe_allow_html=True)
 
-        r1, r2 = st.columns(2)
-        # ── Z-SCORE CARDS
-        bc,bcol,bbg = bbu_style(zs_bbu)
-        btbc,btbcol,btbbg = bbtb_style(zs_bbtb)
+        r1, r2 = st.columns([6, 5])
+
         with r1:
+            # ── THREE Z-SCORE CARDS (BB/U, BB/TB, TB/U)
+            bc,  bcol,  bbg  = bbu_style(zs_bbu)
+            btbc,btbcol,btbbg= bbtb_style(zs_bbtb)
+            tc,  tcol,  tbg, teng = tbu_style(zs_tbu)
             st.markdown(f"""
-            <div class="zsgrid">
+            <div class="zsgrid3">
                 <div class="zscard">
-                    <div class="zstag">Z-Score BB / Umur</div>
+                    <div class="zstag">BB / Umur</div>
                     <div class="zsval" style="color:{bcol};">{zs_bbu:+.2f}</div>
-                    <div class="zsdesc">Berat Badan menurut Umur</div>
+                    <div class="zsdesc">Berat Badan per Usia</div>
                     <span class="zsbadge" style="background:{bbg};color:{bcol};">{bc}</span>
+                    <div class="zspct">Persentil ke-{pct_bbu:.0f}</div>
                 </div>
                 <div class="zscard">
-                    <div class="zstag">Z-Score BB / Tinggi</div>
+                    <div class="zstag">BB / Tinggi</div>
                     <div class="zsval" style="color:{btbcol};">{zs_bbtb:+.2f}</div>
-                    <div class="zsdesc">Berat Badan menurut Tinggi</div>
+                    <div class="zsdesc">Wasting / Status Gizi</div>
                     <span class="zsbadge" style="background:{btbbg};color:{btbcol};">{btbc}</span>
+                    <div class="zspct">Persentil ke-{pct_bbtb:.0f}</div>
+                </div>
+                <div class="zscard" style="border-color:{'rgba(248,113,113,.3)' if zs_tbu < -2 else 'var(--border)'};">
+                    <div class="zstag">TB / Umur ★</div>
+                    <div class="zsval" style="color:{tcol};">{zs_tbu:+.2f}</div>
+                    <div class="zsdesc">Indikator Stunting</div>
+                    <span class="zsbadge" style="background:{tbg};color:{tcol};">{tc}</span>
+                    <div class="zspct">Persentil ke-{pct_tbu:.0f}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -901,161 +1006,356 @@ if menu.startswith("🏠"):
             st.markdown(f"""
             <div class="gwrap">
                 <div class="gtop">
-                    <span class="gttl">Indeks Probabilitas Stunting</span>
-                    <span class="gnum" style="color:{rp['color']};">{pct:.1f}<span style="font-size:.9rem;opacity:.55;">%</span></span>
+                    <span class="gttl">Probabilitas Stunting (AI Model)</span>
+                    <span class="gnum" style="color:{tier['color']};">{pct:.1f}<span style="font-size:.85rem;opacity:.55;">%</span></span>
                 </div>
                 <div class="gtrack">
                     <div class="gbar" style="width:100%;"></div>
-                    <div class="gpip" style="left:{bar_pct}%;color:{rp['color']};background:{rp['color']};"></div>
+                    <div class="gpip" style="left:{bar_pct}%;color:{tier['color']};background:{tier['color']};"></div>
                 </div>
-                <div class="gtick"><span>Normal</span><span>Batas 45%</span><span>Stunting</span></div>
+                <div class="gtick"><span>Normal</span><span>Batas 45%</span><span>Risiko Tinggi</span></div>
             </div>
             """, unsafe_allow_html=True)
 
+            # ── THREE-INDEX STATUS TABLE (Permenkes)
+            st.markdown('<div class="slabel" style="margin-top:.8rem;">Status Gizi Lengkap — Permenkes No.2/2020</div>', unsafe_allow_html=True)
+            def _row_cls(cat): return 'stunting-row' if cat in ["Pendek","Sangat Pendek"] else ''
+            tbu_cat, tbu_col, _, _ = tbu_style(zs_tbu)
+            bbu_cat, bbu_col, _, = bbu_style(zs_bbu)
+            bbtb_cat, bbtb_col, _ = bbtb_style(zs_bbtb)
+            st.markdown(f"""
+            <table class="tistable">
+                <thead><tr>
+                    <th>Indeks</th><th>Z-Score</th><th>Persentil</th>
+                    <th>Median Ref.</th><th>Kategori</th>
+                </tr></thead>
+                <tbody>
+                    <tr class="{_row_cls(tbu_cat)}">
+                        <td class="key-index">TB/U ★ Stunting</td>
+                        <td style="color:{tbu_col};font-family:'Cormorant Garamond',serif;font-size:1.1rem;">{zs_tbu:+.2f}</td>
+                        <td>P{pct_tbu:.0f}</td>
+                        <td>{med_tbu_val} cm</td>
+                        <td><span style="color:{tbu_col};font-weight:500;">{tbu_cat}</span></td>
+                    </tr>
+                    <tr>
+                        <td>BB/U Underweight</td>
+                        <td style="color:{bbu_col};font-family:'Cormorant Garamond',serif;font-size:1.1rem;">{zs_bbu:+.2f}</td>
+                        <td>P{pct_bbu:.0f}</td>
+                        <td>—</td>
+                        <td><span style="color:{bbu_col};font-weight:500;">{bbu_cat}</span></td>
+                    </tr>
+                    <tr>
+                        <td>BB/TB Wasting</td>
+                        <td style="color:{bbtb_col};font-family:'Cormorant Garamond',serif;font-size:1.1rem;">{zs_bbtb:+.2f}</td>
+                        <td>P{pct_bbtb:.0f}</td>
+                        <td>—</td>
+                        <td><span style="color:{bbtb_col};font-weight:500;">{bbtb_cat}</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="font-size:.71rem;color:#475569;margin-top:.35rem;">★ TB/U adalah indikator utama stunting per WHO & Permenkes.</div>
+            """, unsafe_allow_html=True)
+
         with r2:
-            # ── INTERPRETASI HASIL
+            # ── INTERPRETASI
             bands = [
-                ("<b>0 – 44%</b>", "Normal / Aman",       "#34d399", pct < 45),
-                ("<b>45 – 64%</b>","Perlu Diwaspadai",    "#facc15", 45<=pct<65),
-                ("<b>65 – 79%</b>","Risiko Stunting Sedang","#fb923c",65<=pct<80),
-                ("<b>≥ 80%</b>",   "Risiko Stunting Tinggi","#f87171",pct>=80),
+                ("<b>0 – 44%</b>",  "Normal / Aman",          "#34d399", pct < 45),
+                ("<b>45 – 64%</b>", "Perlu Diwaspadai",        "#facc15", 45<=pct<65),
+                ("<b>65 – 79%</b>", "Risiko Stunting Sedang",  "#fb923c", 65<=pct<80),
+                ("<b>≥ 80%</b>",    "Risiko Stunting Tinggi",  "#f87171", pct>=80),
             ]
             bands_html = ""
             for rng, lbl, col, is_active in bands:
                 active_style = f"background:{col}18;border-color:{col}40;" if is_active else "border-color:transparent;"
-                arrow = f"<span style='color:{col};font-size:1rem;'>◀</span>" if is_active else ""
+                arrow = f"<span style='color:{col};'>◀</span>" if is_active else ""
                 bands_html += f"""
-                <div class="irow {'active' if is_active else ''}"
-                     style="{active_style}">
-                    <div class="irow-dot" style="background:{col};{'box-shadow:0 0 6px '+col if is_active else ''}"></div>
+                <div class="irow {'active' if is_active else ''}" style="{active_style}">
+                    <div class="irow-dot" style="background:{col};{'box-shadow:0 0 5px '+col if is_active else ''}"></div>
                     <span style="color:{'#f1f5f9' if is_active else '#64748b'};flex:1;">{rng} — {lbl}</span>
                     {arrow}
                 </div>"""
-
             st.markdown(f"""
             <div class="ibox">
-                <div class="ibox-title">📊 Interpretasi Hasil Prediksi</div>
-                <div style="font-size:.8rem;color:#94a3b8;margin-bottom:.8rem;">
-                    Probabilitas anak: <strong style="color:{rp['color']};">{pct:.1f}%</strong>
-                    &nbsp;·&nbsp; Level: <strong style="color:{rp['color']};">{rp['level']}</strong>
+                <div class="ibox-title">📊 Interpretasi Probabilitas AI</div>
+                <div style="font-size:.78rem;color:#94a3b8;margin-bottom:.7rem;">
+                    Probabilitas: <strong style="color:{tier['color']};">{pct:.1f}%</strong>
+                    &nbsp;·&nbsp; Level: <strong style="color:{tier['color']};">{tier['level']}</strong>
                 </div>
                 {bands_html}
-                <div style="font-size:.72rem;color:#475569;margin-top:.8rem;font-style:italic;">
-                    Ambang batas ditentukan berdasarkan optimasi F1-Score model.
-                    Bukan pengganti diagnosis medis.
+                <div style="font-size:.7rem;color:#475569;margin-top:.6rem;font-style:italic;">
+                    Ambang batas dari optimasi F1-Score. Bukan pengganti diagnosis medis.
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-        # ── META PILLS
-        bmi_val = berat/(tinggi/100)**2
-        kel_map = {0:"ASI Eksklusif",1:"MPASI Awal",2:"Baduta / 1000 HPK",3:"Batita",4:"Balita"}
-        bins_k  = [-1,6,11,23,36,60]; kel = 0
-        for i in range(len(bins_k)-1):
-            if umur_bulan>bins_k[i] and umur_bulan<=bins_k[i+1]: kel=[0,1,2,3,4][i]
-        hpk_col  = "#34d399" if umur_bulan<=23 else "#64748b"
-        hpk_text = "Aktif" if umur_bulan<=23 else "Lewat"
-        st.markdown(f"""
-        <div class="metarow">
-            <div class="mpill">
-                <div class="mplabel">BMI Anak</div>
-                <div class="mpval">{bmi_val:.1f}</div>
-                <div class="mpsub">kg / m²</div>
+            # ── META PILLS
+            bmi_val  = berat/(tinggi/100)**2
+            kel_map  = {0:"ASI Eksklusif",1:"MPASI Awal",2:"Baduta / 1000 HPK",3:"Batita",4:"Balita"}
+            bins_k   = [-1,6,11,23,36,60]; kel = 0
+            for i in range(len(bins_k)-1):
+                if umur_terkoreksi>bins_k[i] and umur_terkoreksi<=bins_k[i+1]: kel=[0,1,2,3,4][i]
+            hpk_col  = "#34d399" if umur_terkoreksi<=23 else "#64748b"
+            hpk_text = "Aktif" if umur_terkoreksi<=23 else "Lewat"
+            selisih_med = tinggi - med_tbu_val
+            sel_col  = "#34d399" if selisih_med >= 0 else "#fb923c"
+            st.markdown(f"""
+            <div class="metarow">
+                <div class="mpill">
+                    <div class="mplabel">BMI Anak</div>
+                    <div class="mpval">{bmi_val:.1f}</div>
+                    <div class="mpsub">kg/m²</div>
+                </div>
+                <div class="mpill">
+                    <div class="mplabel">Window 1000 HPK</div>
+                    <div class="mpval" style="color:{hpk_col};font-size:1rem;">{hpk_text}</div>
+                    <div class="mpsub">{kel_map.get(kel,'—')}</div>
+                </div>
             </div>
-            <div class="mpill">
-                <div class="mplabel">Kelompok Usia</div>
-                <div class="mpval" style="font-size:.95rem;padding:.3rem 0;">{kel_map.get(kel,'—')}</div>
-                <div class="mpsub">Permenkes No.2/2020</div>
+            <div class="metarow">
+                <div class="mpill">
+                    <div class="mplabel">Selisih dari Median TB</div>
+                    <div class="mpval" style="color:{sel_col};">{selisih_med:+.1f}</div>
+                    <div class="mpsub">vs. {med_tbu_val} cm (WHO)</div>
+                </div>
+                <div class="mpill">
+                    <div class="mplabel">Kepercayaan AI</div>
+                    <div class="mpval" style="color:{conf_col};">{confidence:.0f}%</div>
+                    <div class="mpsub">{conf_lbl}</div>
+                </div>
             </div>
-            <div class="mpill">
-                <div class="mplabel">Window 1000 HPK</div>
-                <div class="mpval" style="color:{hpk_col};font-size:1.05rem;">{hpk_text}</div>
-                <div class="mpsub">0 – 23 bulan kritis</div>
-            </div>
-            <div class="mpill">
-                <div class="mplabel">Kepercayaan AI</div>
-                <div class="mpval" style="color:{conf_col};">{confidence:.0f}%</div>
-                <div class="mpsub">{conf_lbl}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        # ── REKOMENDASI INTERVENSI
-        border_col = rp["color"]
-        recs_html = "".join([f'<div class="rec-item">{r}</div>' for r in rp["recs"]])
-        st.markdown(f"""
-        <div class="recbox" style="border-left-color:{border_col};">
-            <span class="acc" style="color:{border_col};">Rekomendasi Intervensi — </span>
-            <div style="margin-top:.6rem;">{recs_html}</div>
-            <div class="disc">
-                Hasil ini merupakan skrining awal berbasis AI dan tidak menggantikan
-                diagnosis medis profesional. Konsultasikan ke tenaga kesehatan untuk
-                penilaian klinis yang menyeluruh.
+            # ── REKOMENDASI
+            border_col = tier["color"]
+            recs_html  = "".join([f'<div class="rec-item">{r}</div>' for r in tier["recs"]])
+            st.markdown(f"""
+            <div class="recbox" style="border-left-color:{border_col};">
+                <span class="acc" style="color:{border_col};">Rekomendasi Intervensi</span>
+                <div style="margin-top:.5rem;">{recs_html}</div>
+                <div class="disc">
+                    Hasil skrining AI — tidak menggantikan diagnosis klinis profesional.
+                    Konsultasikan ke tenaga kesehatan untuk penilaian menyeluruh.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+
+        # ── TAMBAH KE TRACKING NOTIF
+        if nama_anak:
+            st.success(f"✅ Data {nama_anak} disimpan ke Rekam Tumbuh Kembang. Lihat di menu 📈.")
+        else:
+            st.info("💡 Isi nama anak untuk menyimpan data ke fitur Rekam Tumbuh Kembang.")
 
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE 2 — GRAFIK PERTUMBUHAN
+# PAGE 2 — REKAM TUMBUH KEMBANG (NEW FEATURE)
+# ═══════════════════════════════════════════════════════════════
+elif menu.startswith("📈"):
+    st.markdown('<p class="slabel">Rekam Tumbuh Kembang — Pantau Perkembangan dari Waktu ke Waktu</p>',
+                unsafe_allow_html=True)
+
+    tracking = st.session_state.tracking
+    names    = list(tracking.keys())
+
+    # ── INPUT MANUAL REKAM
+    with st.expander("➕  Tambah Catatan Pengukuran Manual", expanded=not bool(names)):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            t_nama  = st.text_input("Nama Anak", key="t_nama", placeholder="Nama anak")
+            t_umur  = st.number_input("Umur (Bulan)", 0, 60, 12, 1, key="t_umur")
+        with c2:
+            t_berat  = st.number_input("BB (kg)", 1.0, 35.0, 9.0, .1, format="%.1f", key="t_berat")
+            t_tinggi = st.number_input("TB (cm)", 40.0, 130.0, 75.0, .1, format="%.1f", key="t_tinggi")
+        with c3:
+            t_jk   = st.selectbox("Jenis Kelamin", ["Laki-laki","Perempuan"], key="t_jk")
+            t_cara = st.selectbox("Cara Ukur", ["Terlentang — Panjang Badan","Berdiri — Tinggi Badan"], key="t_cara")
+
+        if st.button("Tambah ke Rekam", key="add_track"):
+            if not t_nama.strip():
+                st.warning("Masukkan nama anak terlebih dahulu.")
+            else:
+                try:
+                    model, threshold, _ = load_model()
+                    t_jk_c  = "L" if t_jk=="Laki-laki" else "P"
+                    t_cu    = "Berdiri" if t_cara.startswith("Berdiri") else "Terlentang"
+                    X, zb, zbt = build_features(t_umur, t_jk_c, t_berat, t_tinggi, t_cu)
+                    prob = model.predict_proba(X)[0][1]*100
+                    zt   = zscore_tbu(t_tinggi, t_umur, t_jk_c)
+                    if t_nama not in tracking:
+                        tracking[t_nama] = []
+                    tracking[t_nama].append({
+                        "tanggal": datetime.date.today().isoformat(),
+                        "umur": t_umur, "berat": t_berat, "tinggi": t_tinggi,
+                        "zs_bbu": zb, "zs_bbtb": zbt, "zs_tbu": zt, "prob": prob,
+                        "jk": t_jk
+                    })
+                    st.session_state.tracking = tracking
+                    st.success(f"✅ Data {t_nama} berhasil ditambahkan!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+    if not names:
+        st.info("Belum ada rekaman pertumbuhan. Lakukan prediksi (isi nama anak) atau tambah manual di atas.")
+        st.stop()
+
+    # ── SELECT ANAK
+    selected_child = st.selectbox("Pilih Anak", names, key="sel_child")
+    records = tracking[selected_child]
+    records_sorted = sorted(records, key=lambda r: r["umur"])
+
+    # ── SUMMARY METRICS
+    first_r = records_sorted[0]; last_r = records_sorted[-1]
+    delta_bb  = last_r["berat"]  - first_r["berat"]
+    delta_tb  = last_r["tinggi"] - first_r["tinggi"]
+    delta_prob= last_r["prob"]   - first_r["prob"]
+    delta_tbu = last_r["zs_tbu"] - first_r["zs_tbu"]
+
+    def _delta_col(v, positive_good=True):
+        if v == 0: return "#94a3b8"
+        good = v > 0 if positive_good else v < 0
+        return "#34d399" if good else "#f87171"
+
+    st.markdown(f"""
+    <div class="metarow">
+        <div class="mpill">
+            <div class="mplabel">Jumlah Pengukuran</div>
+            <div class="mpval" style="color:#e8d48b;">{len(records)}</div>
+            <div class="mpsub">titik data</div>
+        </div>
+        <div class="mpill">
+            <div class="mplabel">Δ Berat Badan</div>
+            <div class="mpval" style="color:{_delta_col(delta_bb)};">{delta_bb:+.1f}</div>
+            <div class="mpsub">kg sejak awal</div>
+        </div>
+        <div class="mpill">
+            <div class="mplabel">Δ Tinggi Badan</div>
+            <div class="mpval" style="color:{_delta_col(delta_tb)};">{delta_tb:+.1f}</div>
+            <div class="mpsub">cm sejak awal</div>
+        </div>
+        <div class="mpill">
+            <div class="mplabel">Δ Z-Score TB/U</div>
+            <div class="mpval" style="color:{_delta_col(delta_tbu)};">{delta_tbu:+.2f}</div>
+            <div class="mpsub">perubahan stunting</div>
+        </div>
+        <div class="mpill">
+            <div class="mplabel">Δ Probabilitas</div>
+            <div class="mpval" style="color:{_delta_col(delta_prob, positive_good=False)};">{delta_prob:+.1f}%</div>
+            <div class="mpsub">risiko stunting</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── TREND CHART
+    if len(records_sorted) >= 2:
+        fig_track = plot_tracking_chart(records_sorted, last_r.get("jk","L")[:1])
+        if fig_track:
+            st.pyplot(fig_track, use_container_width=True)
+            plt.close(fig_track)
+    else:
+        st.info("Tambahkan minimal 2 pengukuran untuk menampilkan grafik tren.")
+
+    # ── RECORDS TABLE
+    st.markdown('<p class="slabel" style="margin-top:.8rem;">Detail Rekaman</p>', unsafe_allow_html=True)
+    rows_html = ""
+    for rec in records_sorted:
+        tc, tcol, _, _ = tbu_style(rec["zs_tbu"])
+        pcolor = "#34d399" if rec["prob"] < 45 else ("#facc15" if rec["prob"] < 65 else ("#fb923c" if rec["prob"] < 80 else "#f87171"))
+        rows_html += f"""
+        <tr>
+            <td>{rec.get('tanggal','—')}</td>
+            <td style="text-align:center;">{rec['umur']} bln</td>
+            <td style="text-align:center;">{rec['berat']:.1f}</td>
+            <td style="text-align:center;">{rec['tinggi']:.1f}</td>
+            <td style="text-align:center;font-family:'Cormorant Garamond',serif;font-size:1.05rem;color:{tcol};">{rec['zs_tbu']:+.2f}</td>
+            <td style="text-align:center;"><span style="color:{tcol};font-size:.8rem;">{tc}</span></td>
+            <td style="text-align:center;color:{pcolor};font-weight:500;">{rec['prob']:.1f}%</td>
+        </tr>"""
+    st.markdown(f"""
+    <div class="hist-wrap">
+    <table>
+        <thead><tr>
+            <th>Tanggal</th><th>Umur</th><th>BB (kg)</th><th>TB (cm)</th>
+            <th>ZS TB/U</th><th>Status Tinggi</th><th>Prob Stunting</th>
+        </tr></thead>
+        <tbody>{rows_html}</tbody>
+    </table>
+    </div>""", unsafe_allow_html=True)
+
+    # ── HAPUS DATA ANAK
+    st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+    col_a, col_b = st.columns([3,1])
+    with col_b:
+        if st.button(f"🗑️  Hapus Data {selected_child}", key="del_child"):
+            del st.session_state.tracking[selected_child]
+            st.rerun()
+
+    # ── EXPORT
+    df_track = pd.DataFrame(records_sorted)
+    csv_track = df_track.to_csv(index=False).encode("utf-8")
+    with col_a:
+        st.download_button(
+            f"⬇️  Unduh Rekaman {selected_child} (CSV)",
+            data=csv_track,
+            file_name=f"tumbuh_kembang_{selected_child}_{datetime.date.today()}.csv",
+            mime="text/csv"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
+# PAGE 3 — GRAFIK PERTUMBUHAN WHO
 # ═══════════════════════════════════════════════════════════════
 elif menu.startswith("📊"):
     st.markdown('<p class="slabel">WHO Growth Chart — Kurva Pertumbuhan Standar</p>', unsafe_allow_html=True)
 
     res = st.session_state.last_result
     if res:
-        jk_lbl  = res["jk"]
-        jk_code = "L" if jk_lbl=="Laki-laki" else "P"
-        st.info(f"📌 Menggunakan data terakhir: **{res['nama'] or 'Anak'}** — "
+        jk_code = "L" if res["jk"]=="Laki-laki" else "P"
+        st.info(f"📌 Data terakhir: **{res['nama'] or 'Anak'}** — "
                 f"Usia {res['umur']} bln · BB {res['berat']} kg · TB {res['tinggi']} cm")
         umur_g=res["umur"]; berat_g=res["berat"]; tinggi_g=res["tinggi"]; jk_g=jk_code
     else:
-        st.info("Belum ada prediksi. Gunakan form di bawah atau lakukan prediksi dulu.")
+        st.info("Belum ada prediksi. Isi form di bawah untuk plot kurva.")
         c1,c2,c3 = st.columns(3)
         with c1: umur_g  = st.number_input("Umur (bln)", 0,60,24,1,key="g_umur")
-        with c2: berat_g = st.number_input("Berat (kg)",1.0,35.0,12.0,.1,format="%.1f",key="g_berat")
-        with c3: tinggi_g= st.number_input("Tinggi (cm)",40.0,130.0,87.0,.1,format="%.1f",key="g_tinggi")
-        jk_g = "L" if st.selectbox("Jenis Kelamin",["Laki-laki","Perempuan"],key="g_jk")=="Laki-laki" else "P"
+        with c2: berat_g = st.number_input("BB (kg)",1.0,35.0,12.0,.1,format="%.1f",key="g_berat")
+        with c3: tinggi_g= st.number_input("TB (cm)",40.0,130.0,87.0,.1,format="%.1f",key="g_tinggi")
+        jk_g = "L" if st.selectbox("JK",["Laki-laki","Perempuan"],key="g_jk")=="Laki-laki" else "P"
 
     fig = plot_growth_chart(umur_g, tinggi_g, berat_g, jk_g)
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
-    # ── Interpretasi posisi anak
-    # Interpolate median & -2SD for child's age
-    hfa = HFA_BOYS if jk_g=="L" else HFA_GIRLS
-    ages_hfa = [r[0] for r in hfa]
-    idx = bisect.bisect_left(ages_hfa, umur_g)
-    idx = max(1, min(len(hfa)-1, idx))
-    t   = (umur_g - ages_hfa[idx-1])/(ages_hfa[idx]-ages_hfa[idx-1]+1e-9)
-    med_tb  = hfa[idx-1][3]+t*(hfa[idx][3]-hfa[idx-1][3])
-    s2n_tb  = hfa[idx-1][2]+t*(hfa[idx][2]-hfa[idx-1][2])
-    s3n_tb  = hfa[idx-1][1]+t*(hfa[idx][1]-hfa[idx-1][1])
-    gap_med = tinggi_g - med_tb
-    gap_s2  = tinggi_g - s2n_tb
+    # ── TB/U interpretation
+    zs_tbu_g = zscore_tbu(tinggi_g, umur_g, jk_g)
+    med_g     = median_tbu(umur_g, jk_g)
+    tc_g, tcol_g, _, teng_g = tbu_style(zs_tbu_g)
+    pct_g = zscore_to_percentile(zs_tbu_g)
 
+    status_msg = {
+        "Sangat Pendek": "🔴 Tinggi badan berada di bawah −3 SD — Sangat Pendek (Severely Stunted)",
+        "Pendek":        "🟠 Tinggi badan berada di bawah −2 SD — Pendek (Stunted)",
+        "Normal":        "✅ Tinggi badan berada dalam rentang normal WHO",
+        "Tinggi":        "🔵 Tinggi badan berada di atas +3 SD",
+    }
     st.markdown(f"""
     <div class="ibox" style="margin-top:1rem;">
-        <div class="ibox-title">📊 Interpretasi Posisi Anak pada Kurva WHO</div>
+        <div class="ibox-title">📊 Interpretasi TB/U pada Kurva WHO</div>
         <div style="font-size:.88rem;color:#94a3b8;line-height:1.8;">
-            <b style="color:#e8d48b;">Tinggi badan:</b> {tinggi_g:.1f} cm
-            &nbsp;·&nbsp;
-            <b style="color:#94a3b8;">Median WHO usia {umur_g} bln:</b> {med_tb:.1f} cm
-            &nbsp;·&nbsp;
-            <b style="color:#94a3b8;">Selisih dari median:</b>
-            <span style="color:{'#34d399' if gap_med>=0 else '#f87171'};">{gap_med:+.1f} cm</span>
+            <b style="color:#e8d48b;">Tinggi badan anak:</b> {tinggi_g:.1f} cm &nbsp;·&nbsp;
+            <b style="color:#94a3b8;">Median WHO usia {umur_g} bln:</b> {med_g} cm &nbsp;·&nbsp;
+            <b style="color:#94a3b8;">Z-Score TB/U:</b>
+            <span style="color:{tcol_g};font-weight:600;">{zs_tbu_g:+.2f} ({tc_g})</span>
+            &nbsp;·&nbsp; Persentil ke-<b style="color:{tcol_g};">{pct_g:.0f}</b>
         </div>
-        <div style="font-size:.85rem;color:#94a3b8;margin-top:.5rem;">
-            {"✅ Tinggi badan berada di atas atau pada batas median WHO — pertumbuhan baik." if tinggi_g >= med_tb
-             else ("⚠️ Tinggi badan berada antara −2 SD dan median — perlu dipantau." if tinggi_g >= s2n_tb
-             else "🔴 Tinggi badan berada di bawah −2 SD — indikasi stunting pada standar TB/U.")}
+        <div style="font-size:.85rem;color:#94a3b8;margin-top:.4rem;">
+            {status_msg.get(tc_g, "")}
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE 3 — FEATURE IMPORTANCE
+# PAGE 4 — ANALISIS FITUR
 # ═══════════════════════════════════════════════════════════════
 elif menu.startswith("🧬"):
     st.markdown('<p class="slabel">Faktor Penentu Prediksi — Feature Importance</p>', unsafe_allow_html=True)
@@ -1070,7 +1370,7 @@ elif menu.startswith("🧬"):
         <div style="font-size:.87rem;color:#94a3b8;line-height:1.8;">
             Feature importance menunjukkan <b style="color:#e8d48b;">seberapa besar kontribusi tiap variabel</b>
             dalam keputusan model ensemble (CatBoost + XGBoost).
-            Nilai dihitung dari rata-rata gain (CatBoost) dan weight (XGBoost) ternormalisasi.<br><br>
+            Nilai dihitung dari rata-rata gain ternormalisasi.<br><br>
             <b style="color:#e8d48b;">Temuan utama:</b>
             Indeks gizi berbasis Z-Score (BB/TB & BB/U) mendominasi prediksi karena langsung
             mencerminkan status gizi anak relatif terhadap standar WHO. Tinggi badan raw
@@ -1080,8 +1380,7 @@ elif menu.startswith("🧬"):
     </div>
     """, unsafe_allow_html=True)
 
-    # Table
-    st.markdown('<p class="slabel" style="margin-top:1.2rem;">Tabel Lengkap</p>', unsafe_allow_html=True)
+    st.markdown('<p class="slabel" style="margin-top:1.2rem;">Tabel Kontribusi Fitur</p>', unsafe_allow_html=True)
     df_fi = pd.DataFrame(FEATURE_IMPORTANCE, columns=["Fitur","Kontribusi (%)"])
     df_fi.index = df_fi.index + 1
     st.dataframe(
@@ -1091,27 +1390,26 @@ elif menu.startswith("🧬"):
 
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE 4 — SIMULASI RISIKO
+# PAGE 5 — SIMULASI INTERVENSI
 # ═══════════════════════════════════════════════════════════════
 elif menu.startswith("⚡"):
-    st.markdown('<p class="slabel">Simulasi — Bagaimana Jika Parameter Berubah?</p>', unsafe_allow_html=True)
+    st.markdown('<p class="slabel">Simulasi Intervensi — Bagaimana Jika Parameter Berubah?</p>',
+                unsafe_allow_html=True)
 
     res = st.session_state.last_result
     if not res:
-        st.warning("⚠️ Lakukan prediksi tunggal terlebih dahulu di menu Prediksi Tunggal.")
+        st.warning("⚠️ Lakukan prediksi tunggal terlebih dahulu di menu Prediksi & Analisis.")
         st.stop()
 
-    base_berat  = res["berat"]
-    base_tinggi = res["tinggi"]
-    base_umur   = res["umur"]
-    jk          = "L" if res["jk"]=="Laki-laki" else "P"
-    cara        = res["cara"]
-    base_pct    = res["pct"]
+    base_berat=res["berat"]; base_tinggi=res["tinggi"]
+    base_umur=res["umur"]; jk="L" if res["jk"]=="Laki-laki" else "P"
+    cara=res["cara"]; base_pct=res["pct"]
 
     st.markdown(f"""
     <div class="gcard" style="margin-bottom:1.2rem;">
-        <div class="ibox-title">📌 Data Dasar</div>
+        <div class="ibox-title">📌 Data Dasar Prediksi Terakhir</div>
         <div style="font-size:.88rem;color:#94a3b8;">
+            Anak: <b style="color:#e8d48b;">{res['nama'] or '—'}</b> &nbsp;·&nbsp;
             Usia: <b style="color:#e8d48b;">{base_umur} bln</b> &nbsp;·&nbsp;
             BB: <b style="color:#e8d48b;">{base_berat} kg</b> &nbsp;·&nbsp;
             TB: <b style="color:#e8d48b;">{base_tinggi} cm</b> &nbsp;·&nbsp;
@@ -1122,41 +1420,33 @@ elif menu.startswith("⚡"):
 
     c1, c2 = st.columns(2)
     with c1:
-        delta_bb  = st.slider("Δ Berat Badan (kg)", -3.0, 5.0, 0.0, 0.1,
-                               format="%+.1f kg", help="Perubahan berat dari nilai dasar")
-        delta_tb  = st.slider("Δ Tinggi / Panjang Badan (cm)", -5.0, 10.0, 0.0, 0.5,
-                               format="%+.1f cm", help="Perubahan tinggi dari nilai dasar")
+        delta_bb  = st.slider("Δ Berat Badan (kg)",   -3.0, 5.0, 0.0, 0.1, format="%+.1f kg")
+        delta_tb  = st.slider("Δ Tinggi Badan (cm)",  -5.0, 10.0, 0.0, 0.5, format="%+.1f cm")
     with c2:
-        delta_umur = st.slider("Δ Usia (bulan ke depan)", 0, 12, 0, 1,
-                                format="+%d bln", help="Proyeksi pertumbuhan di masa mendatang")
+        delta_umur= st.slider("Proyeksi Usia Ke Depan (+bln)", 0, 12, 0, 1, format="+%d bln")
 
-    # Simulate with multiple delta points for chart
     with st.spinner("Menghitung simulasi..."):
         try:
             model, threshold, _ = load_model()
-            new_berat  = max(1.0, base_berat  + delta_bb)
+            new_berat  = max(1.0, base_berat + delta_bb)
             new_tinggi = max(40.0, base_tinggi + delta_tb)
             new_umur   = min(60, base_umur + delta_umur)
-
             X_new, zs_new_bbu, zs_new_bbtb = build_features(new_umur, jk, new_berat, new_tinggi, cara)
-            proba_new  = model.predict_proba(X_new)[0]
-            pct_new    = proba_new[1] * 100
+            pct_new    = model.predict_proba(X_new)[0][1]*100
+            zs_new_tbu = zscore_tbu(new_tinggi, new_umur, jk)
             tier_new   = risk_tier(pct_new)
             delta_pct  = pct_new - base_pct
+            pct_new_tbu= zscore_to_percentile(zs_new_tbu)
 
-            # Sensitivity curve: berat ±3
-            bb_range = np.arange(max(1.0, base_berat-3), min(30, base_berat+5.1), 0.5)
-            pct_bb = []
-            for bb in bb_range:
-                X_t,_,_ = build_features(new_umur, jk, bb, new_tinggi, cara)
-                pct_bb.append(model.predict_proba(X_t)[0][1]*100)
-
+            # Sensitivity curve
+            bb_range = np.arange(max(1.0, base_berat-3), min(30, base_berat+5.1), 0.4)
+            pct_bb   = [model.predict_proba(build_features(new_umur,jk,bb,new_tinggi,cara)[0])[0][1]*100
+                        for bb in bb_range]
         except Exception as e:
-            st.error(f"Error simulasi: {e}"); st.stop()
+            st.error(f"Error: {e}"); st.stop()
 
-    # Result
-    arrow = "↓" if delta_pct < 0 else "↑"
-    arr_col = "#34d399" if delta_pct < 0 else "#f87171"
+    arrow  = "↓" if delta_pct < 0 else "↑"
+    arr_col= "#34d399" if delta_pct < 0 else "#f87171"
     st.markdown(f"""
     <div class="rp {tier_new['cls']}" style="margin-top:1rem;">
         <div class="rp-eyebrow" style="color:{tier_new['color']};">Hasil Simulasi</div>
@@ -1164,41 +1454,40 @@ elif menu.startswith("⚡"):
         <div class="rp-headline" style="color:{tier_new['color']};">{tier_new['title']}</div>
         <div class="rp-prob">
             Probabilitas: <strong style="color:{tier_new['color']};">{pct_new:.1f}%</strong>
-            &nbsp;
-            <span style="color:{arr_col}; font-weight:600;">{arrow} {abs(delta_pct):.1f}%</span>
+            &nbsp;<span style="color:{arr_col};font-weight:600;">{arrow} {abs(delta_pct):.1f}%</span>
             dari data dasar ({base_pct:.1f}%)
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     # Z-score comparison
-    c_a, c_b = st.columns(2)
-    bc_new,bcol_new,bbg_new = bbu_style(zs_new_bbu)
-    btbc_new,btbcol_new,btbbg_new = bbtb_style(zs_new_bbtb)
-    with c_a:
-        st.markdown(f"""
+    bc_n,bcol_n,bbg_n    = bbu_style(zs_new_bbu)
+    btbc_n,btbcol_n,btbbg_n = bbtb_style(zs_new_bbtb)
+    tc_n, tcol_n, tbg_n, _ = tbu_style(zs_new_tbu)
+    c_a, c_b, c_c = st.columns(3)
+    for col_ui, tag, z, cat, zcol, zbg in [
+        (c_a,"BB/U (Sim.)",  zs_new_bbu,  bc_n,  bcol_n,  bbg_n),
+        (c_b,"BB/TB (Sim.)", zs_new_bbtb, btbc_n,btbcol_n,btbbg_n),
+        (c_c,"TB/U ★ (Sim.)",zs_new_tbu,  tc_n,  tcol_n,  tbg_n),
+    ]:
+        col_ui.markdown(f"""
         <div class="zscard" style="text-align:center;padding:1rem;">
-            <div class="zstag">Z-Score BB/U (Simulasi)</div>
-            <div class="zsval" style="color:{bcol_new};">{zs_new_bbu:+.2f}</div>
-            <span class="zsbadge" style="background:{bbg_new};color:{bcol_new};">{bc_new}</span>
-        </div>""", unsafe_allow_html=True)
-    with c_b:
-        st.markdown(f"""
-        <div class="zscard" style="text-align:center;padding:1rem;">
-            <div class="zstag">Z-Score BB/TB (Simulasi)</div>
-            <div class="zsval" style="color:{btbcol_new};">{zs_new_bbtb:+.2f}</div>
-            <span class="zsbadge" style="background:{btbbg_new};color:{btbcol_new};">{btbc_new}</span>
+            <div class="zstag">{tag}</div>
+            <div class="zsval" style="color:{zcol};">{z:+.2f}</div>
+            <div class="zspct">P{zscore_to_percentile(z):.0f}</div>
+            <span class="zsbadge" style="background:{zbg};color:{zcol};">{cat}</span>
         </div>""", unsafe_allow_html=True)
 
     # Sensitivity chart
-    st.markdown('<p class="slabel" style="margin-top:1.2rem;">Kurva Sensitivitas — Probabilitas vs Berat Badan</p>', unsafe_allow_html=True)
-    fig2, ax2 = plt.subplots(figsize=(10,3.8))
+    st.markdown('<p class="slabel" style="margin-top:1.2rem;">Kurva Sensitivitas — Probabilitas vs Berat Badan</p>',
+                unsafe_allow_html=True)
+    fig2, ax2 = plt.subplots(figsize=(10,3.6))
     fig2.patch.set_facecolor("#1a2535"); ax2.set_facecolor("#111827")
-    ax2.fill_between(bb_range, 45, 100, color="#f87171", alpha=.07)
+    ax2.fill_between(bb_range, 45, 100, color="#f87171", alpha=.06)
     ax2.axhline(45, color="#facc15", lw=1, linestyle="--", alpha=.6, label="Batas 45%")
-    ax2.plot(bb_range, pct_bb, color="#4fd1c5", lw=2.5)
+    ax2.plot(bb_range, pct_bb, color="#4fd1c5", lw=2.3)
     ax2.scatter([new_berat], [pct_new], color="#c9a84c", s=80, zorder=5, label=f"Simulasi ({new_berat:.1f} kg)")
-    ax2.scatter([base_berat], [base_pct], color="#94a3b8", s=60, zorder=4, label=f"Data Dasar ({base_berat:.1f} kg)")
+    ax2.scatter([base_berat],[base_pct], color="#94a3b8", s=60, zorder=4, label=f"Dasar ({base_berat:.1f} kg)")
     ax2.set_xlabel("Berat Badan (kg)", color="#64748b", fontsize=9)
     ax2.set_ylabel("Probabilitas Stunting (%)", color="#64748b", fontsize=9)
     ax2.set_title("Sensitivitas Probabilitas Stunting terhadap Perubahan Berat Badan",
@@ -1213,139 +1502,138 @@ elif menu.startswith("⚡"):
     st.pyplot(fig2, use_container_width=True)
     plt.close(fig2)
 
+    # TB sensitivity
+    tb_range = np.arange(max(40.0, base_tinggi-5), min(130.0, base_tinggi+10.1), 0.5)
+    pct_tb   = [model.predict_proba(build_features(new_umur,jk,new_berat,tb,cara)[0])[0][1]*100
+                for tb in tb_range]
+    st.markdown('<p class="slabel">Kurva Sensitivitas — Probabilitas vs Tinggi Badan</p>',
+                unsafe_allow_html=True)
+    fig3, ax3 = plt.subplots(figsize=(10,3.4))
+    fig3.patch.set_facecolor("#1a2535"); ax3.set_facecolor("#111827")
+    ax3.fill_between(tb_range, 45, 100, color="#f87171", alpha=.06)
+    ax3.axhline(45, color="#facc15", lw=1, linestyle="--", alpha=.6, label="Batas 45%")
+    ax3.plot(tb_range, pct_tb, color="#a78bfa", lw=2.3)
+    ax3.scatter([new_tinggi],[pct_new], color="#c9a84c", s=80, zorder=5, label=f"Simulasi ({new_tinggi:.1f} cm)")
+    ax3.set_xlabel("Tinggi Badan (cm)", color="#64748b", fontsize=9)
+    ax3.set_ylabel("Probabilitas Stunting (%)", color="#64748b", fontsize=9)
+    ax3.set_title("Sensitivitas Probabilitas Stunting terhadap Perubahan Tinggi Badan",
+                  color="#e8d48b", fontsize=10, fontweight='normal')
+    ax3.tick_params(colors="#64748b", labelsize=8.5)
+    for sp in ['bottom','left']: ax3.spines[sp].set_color("#1f2d42")
+    for sp in ['top','right']:   ax3.spines[sp].set_visible(False)
+    ax3.grid(color="#1f2d42", linestyle="--", linewidth=0.7, alpha=0.7)
+    ax3.legend(fontsize=8, facecolor="#1a2535", edgecolor="#1f2d42", labelcolor="#94a3b8")
+    ax3.set_ylim(0, 100)
+    plt.tight_layout()
+    st.pyplot(fig3, use_container_width=True)
+    plt.close(fig3)
+
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE 5 — RIWAYAT PREDIKSI
+# PAGE 6 — RIWAYAT PREDIKSI
 # ═══════════════════════════════════════════════════════════════
 elif menu.startswith("📋"):
     st.markdown('<p class="slabel">Riwayat Prediksi — Sesi Ini</p>', unsafe_allow_html=True)
 
     hist = st.session_state.history
     if not hist:
-        st.info("Belum ada riwayat prediksi. Lakukan prediksi di menu Prediksi Tunggal.")
+        st.info("Belum ada riwayat. Lakukan prediksi di menu Prediksi & Analisis.")
     else:
         df_hist = pd.DataFrame(hist)
-
-        # Color coding
-        def result_color(r):
-            if "Normal" in r:   return "background-color:#0d2218;color:#34d399;"
-            if "Diwaspadai" in r: return "background-color:#1a1a00;color:#facc15;"
-            if "Sedang" in r:   return "background-color:#1a0e00;color:#fb923c;"
-            return "background-color:#1a0909;color:#f87171;"
-
-        # Summary stats
-        total = len(df_hist)
-        n_normal   = sum("Normal" in r for r in df_hist["Hasil"])
-        n_risk     = total - n_normal
-        avg_prob   = df_hist["Prob (%)"].mean()
+        total   = len(df_hist)
+        n_normal= sum("Normal" in r for r in df_hist["Hasil"])
+        avg_prob= df_hist["Prob (%)"].mean()
+        n_stunt_direct = sum(r < -2 for r in df_hist.get("ZS TB/U", pd.Series(dtype=float)))
 
         c1,c2,c3,c4 = st.columns(4)
         for col,lbl,val,clr in [
             (c1,"Total Prediksi",str(total),"#e8d48b"),
             (c2,"Status Normal",str(n_normal),"#34d399"),
-            (c3,"Indikasi Risiko",str(n_risk),"#f87171"),
+            (c3,"Indikasi Risiko",str(total-n_normal),"#f87171"),
             (c4,"Rata-rata Prob",f"{avg_prob:.1f}%","#4fd1c5"),
         ]:
             col.markdown(f"""
-            <div class="stat-box">
-                <div class="stat-val" style="color:{clr};">{val}</div>
-                <div class="stat-lbl">{lbl}</div>
+            <div style="background:var(--navy-3);border:1px solid var(--border);border-radius:12px;
+                        padding:1rem;text-align:center;margin-bottom:.6rem;">
+                <div style="font-family:'Cormorant Garamond',serif;font-size:1.8rem;color:{clr};">{val}</div>
+                <div style="font-size:.68rem;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;">{lbl}</div>
             </div>""", unsafe_allow_html=True)
-
-        st.markdown("<div style='height:.6rem'></div>", unsafe_allow_html=True)
 
         # Table
         rows_html = ""
         for _, row in df_hist.iterrows():
             rst = row["Hasil"]
-            if "Normal" in rst:       badge_style = "color:#34d399;background:rgba(52,211,153,.12);padding:.2rem .6rem;border-radius:6px;"
-            elif "Diwaspadai" in rst: badge_style = "color:#facc15;background:rgba(250,204,21,.12);padding:.2rem .6rem;border-radius:6px;"
-            elif "Sedang" in rst:     badge_style = "color:#fb923c;background:rgba(251,146,60,.12);padding:.2rem .6rem;border-radius:6px;"
-            else:                     badge_style = "color:#f87171;background:rgba(248,113,113,.12);padding:.2rem .6rem;border-radius:6px;"
+            if "Normal" in rst:       bs = "color:#34d399;background:rgba(52,211,153,.10);padding:.18rem .55rem;border-radius:5px;"
+            elif "Diwaspadai" in rst: bs = "color:#facc15;background:rgba(250,204,21,.10);padding:.18rem .55rem;border-radius:5px;"
+            elif "Sedang" in rst:     bs = "color:#fb923c;background:rgba(251,146,60,.10);padding:.18rem .55rem;border-radius:5px;"
+            else:                     bs = "color:#f87171;background:rgba(248,113,113,.10);padding:.18rem .55rem;border-radius:5px;"
+            tbu_z   = row.get("ZS TB/U", "—")
+            tc_h, tcol_h, _, _ = tbu_style(float(tbu_z)) if tbu_z != "—" else ("—","#64748b","","")
             rows_html += f"""
             <tr>
-                <td>{row['Waktu']}</td>
-                <td>{row['Nama']}</td>
+                <td>{row['Waktu']}</td><td>{row['Nama']}</td>
                 <td style="text-align:center;">{row['Umur (bln)']}</td>
                 <td style="text-align:center;">{row['BB (kg)']}</td>
                 <td style="text-align:center;">{row['TB (cm)']}</td>
                 <td style="text-align:center;">{row['JK']}</td>
+                <td style="text-align:center;color:{tcol_h};">{tbu_z if tbu_z=='—' else f'{float(tbu_z):+.2f}'}</td>
+                <td style="text-align:center;color:{tcol_h};font-size:.79rem;">{tc_h}</td>
                 <td style="text-align:center;color:#e8d48b;font-weight:500;">{row['Prob (%)']:.1f}%</td>
-                <td><span style="{badge_style}">{rst}</span></td>
+                <td><span style="{bs}">{rst}</span></td>
             </tr>"""
-
         st.markdown(f"""
         <div class="hist-wrap">
-        <table>
-            <thead><tr>
-                <th>Waktu</th><th>Nama</th><th>Umur</th><th>BB</th>
-                <th>TB</th><th>JK</th><th>Prob</th><th>Hasil</th>
-            </tr></thead>
-            <tbody>{rows_html}</tbody>
-        </table>
+        <table><thead><tr>
+            <th>Waktu</th><th>Nama</th><th>Umur</th><th>BB</th><th>TB</th>
+            <th>JK</th><th>ZS TB/U</th><th>Status TB</th><th>Prob</th><th>Hasil AI</th>
+        </tr></thead><tbody>{rows_html}</tbody></table>
         </div>""", unsafe_allow_html=True)
 
-        # Export CSV
-        st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
-        csv_data = df_hist.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="⬇️  Unduh Riwayat sebagai CSV",
-            data=csv_data,
-            file_name=f"riwayat_prediksi_{datetime.date.today()}.csv",
-            mime="text/csv"
-        )
-
-        if st.button("🗑️  Hapus Riwayat"):
-            st.session_state.history = []
-            st.rerun()
+        st.markdown("<div style='height:.7rem'></div>", unsafe_allow_html=True)
+        ca, cb = st.columns([3,1])
+        with ca:
+            csv_data = df_hist.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇️  Unduh Riwayat CSV", data=csv_data,
+                               file_name=f"riwayat_{datetime.date.today()}.csv", mime="text/csv")
+        with cb:
+            if st.button("🗑️  Hapus Riwayat"):
+                st.session_state.history = []
+                st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE 6 — BATCH EXCEL UPLOAD
+# PAGE 7 — PREDIKSI BATCH EXCEL
 # ═══════════════════════════════════════════════════════════════
 elif menu.startswith("📁"):
     st.markdown('<p class="slabel">Prediksi Massal — Upload File Excel</p>', unsafe_allow_html=True)
 
     st.markdown("""
     <div class="ibox" style="margin-bottom:1.2rem;">
-        <div class="ibox-title">📋 Format File Excel</div>
-        <div style="font-size:.86rem;color:#94a3b8;line-height:1.8;">
-            File harus memiliki kolom berikut (nama persis, huruf kecil):<br>
-            <code style="background:#0b1120;color:#4fd1c5;padding:.15rem .4rem;border-radius:4px;">
-                umur_bulan</code> &nbsp;
-            <code style="background:#0b1120;color:#4fd1c5;padding:.15rem .4rem;border-radius:4px;">
-                jk</code> (L/P) &nbsp;
-            <code style="background:#0b1120;color:#4fd1c5;padding:.15rem .4rem;border-radius:4px;">
-                berat</code> &nbsp;
-            <code style="background:#0b1120;color:#4fd1c5;padding:.15rem .4rem;border-radius:4px;">
-                tinggi</code> &nbsp;
-            <code style="background:#0b1120;color:#4fd1c5;padding:.15rem .4rem;border-radius:4px;">
-                cara_ukur</code> (Berdiri/Terlentang)
-            <br>Kolom <code style="background:#0b1120;color:#4fd1c5;padding:.15rem .4rem;border-radius:4px;">
-                nama</code> bersifat opsional.
+        <div class="ibox-title">📋 Format Kolom File Excel (nama persis, huruf kecil)</div>
+        <div style="font-size:.86rem;color:#94a3b8;line-height:1.9;">
+            <code style="background:#0b1120;color:#4fd1c5;padding:.12rem .38rem;border-radius:4px;">umur_bulan</code>
+            <code style="background:#0b1120;color:#4fd1c5;padding:.12rem .38rem;border-radius:4px;">jk</code> (L/P)
+            <code style="background:#0b1120;color:#4fd1c5;padding:.12rem .38rem;border-radius:4px;">berat</code>
+            <code style="background:#0b1120;color:#4fd1c5;padding:.12rem .38rem;border-radius:4px;">tinggi</code>
+            <code style="background:#0b1120;color:#4fd1c5;padding:.12rem .38rem;border-radius:4px;">cara_ukur</code>
+            (Berdiri/Terlentang)
+            <br>Kolom <code style="background:#0b1120;color:#4fd1c5;padding:.12rem .38rem;border-radius:4px;">nama</code> opsional.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Template download
+    # Template
     template_df = pd.DataFrame({
-        "nama":       ["Budi","Sari"],
-        "umur_bulan": [24, 36],
-        "jk":         ["L","P"],
-        "berat":      [11.5, 13.2],
-        "tinggi":     [85.0, 93.5],
-        "cara_ukur":  ["Berdiri","Berdiri"]
+        "nama":["Budi","Sari","Andi"], "umur_bulan":[24,36,12], "jk":["L","P","L"],
+        "berat":[11.5,13.2,8.8], "tinggi":[85.0,93.5,72.0], "cara_ukur":["Berdiri","Berdiri","Terlentang"]
     })
     tpl_bytes = io.BytesIO()
     template_df.to_excel(tpl_bytes, index=False)
-    st.download_button(
-        "⬇️  Unduh Template Excel",
-        data=tpl_bytes.getvalue(),
-        file_name="template_prediksi_stunting.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    st.download_button("⬇️  Unduh Template Excel", data=tpl_bytes.getvalue(),
+                       file_name="template_prediksi_stunting.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    uploaded = st.file_uploader("Upload File Excel (.xlsx)", type=["xlsx","xls"])
+    uploaded = st.file_uploader("Upload File Excel (.xlsx / .xls)", type=["xlsx","xls"])
     if uploaded:
         try:
             df_up = pd.read_excel(uploaded)
@@ -1353,180 +1641,64 @@ elif menu.startswith("📁"):
             required = ["umur_bulan","jk","berat","tinggi","cara_ukur"]
             missing  = [c for c in required if c not in df_up.columns]
             if missing:
-                st.error(f"Kolom tidak ditemukan: {missing}")
-            else:
-                model, threshold, _ = load_model()
-                results = []
-                prog = st.progress(0)
-                for idx, row in df_up.iterrows():
-                    prog.progress((idx+1)/len(df_up))
-                    try:
-                        X, z_bbu, z_bbtb = build_features(
-                            int(row.umur_bulan), str(row.jk).strip(),
-                            float(row.berat), float(row.tinggi),
-                            str(row.cara_ukur).strip()
-                        )
-                        prob = model.predict_proba(X)[0][1]*100
-                        tier = risk_tier(prob)
-                        bc,bcol,_ = bbu_style(z_bbu); btbc,_,_ = bbtb_style(z_bbtb)
-                        results.append({
-                            "Nama":     row.get("nama","—"),
-                            "Umur":     int(row.umur_bulan),
-                            "JK":       row.jk,
-                            "BB (kg)":  float(row.berat),
-                            "TB (cm)":  float(row.tinggi),
-                            "ZS BB/U":  round(z_bbu,2),
-                            "ZS BB/TB": round(z_bbtb,2),
-                            "Status BB/U": bc,
-                            "Status BB/TB": btbc,
-                            "Prob (%)": round(prob,1),
-                            "Hasil":    tier["title"],
-                            "Level":    tier["level"],
-                        })
-                    except Exception as ex:
-                        results.append({"Nama": row.get("nama","?"), "Error": str(ex)})
-                prog.empty()
+                st.error(f"Kolom tidak ditemukan: {missing}"); st.stop()
 
-                df_out = pd.DataFrame(results)
-                # Summary
-                total_b = len(df_out)
-                n_ok    = sum("Normal" in str(r) for r in df_out.get("Hasil",[]))
-                n_risk2 = total_b - n_ok
-                st.markdown(f"""
-                <div class="metarow" style="margin-top:1rem;">
-                    <div class="mpill"><div class="mplabel">Total Data</div>
-                        <div class="mpval">{total_b}</div><div class="mpsub">anak dianalisis</div></div>
-                    <div class="mpill"><div class="mplabel">Normal</div>
-                        <div class="mpval" style="color:#34d399;">{n_ok}</div>
-                        <div class="mpsub">aman</div></div>
-                    <div class="mpill"><div class="mplabel">Perlu Perhatian</div>
-                        <div class="mpval" style="color:#f87171;">{n_risk2}</div>
-                        <div class="mpsub">ada indikasi</div></div>
-                    <div class="mpill"><div class="mplabel">Prevalensi</div>
-                        <div class="mpval" style="color:#facc15;">{n_risk2/total_b*100:.1f}%</div>
-                        <div class="mpsub">dari total</div></div>
-                </div>
-                """, unsafe_allow_html=True)
+            model, threshold, _ = load_model()
+            results = []
+            prog = st.progress(0)
+            for idx, row in df_up.iterrows():
+                prog.progress((idx+1)/len(df_up))
+                try:
+                    umur_r = int(row.umur_bulan); jk_r = str(row.jk).strip()
+                    bb_r = float(row.berat); tb_r = float(row.tinggi)
+                    cu_r = str(row.cara_ukur).strip()
+                    X, z_bbu, z_bbtb = build_features(umur_r, jk_r, bb_r, tb_r, cu_r)
+                    prob = model.predict_proba(X)[0][1]*100
+                    z_tbu= zscore_tbu(tb_r, umur_r, jk_r)
+                    tier = risk_tier(prob)
+                    bc,_,_  = bbu_style(z_bbu)
+                    btbc,_,_= bbtb_style(z_bbtb)
+                    tc,tcol,_,teng = tbu_style(z_tbu)
+                    results.append({
+                        "Nama": row.get("nama","—"), "Umur (bln)": umur_r,
+                        "JK": jk_r, "BB (kg)": bb_r, "TB (cm)": tb_r,
+                        "ZS BB/U": round(z_bbu,2), "ZS BB/TB": round(z_bbtb,2),
+                        "ZS TB/U": round(z_tbu,2),
+                        "Status TB/U": tc, "Persentil TB/U": round(zscore_to_percentile(z_tbu),1),
+                        "Status BB/U": bc, "Status BB/TB": btbc,
+                        "Prob (%)": round(prob,1), "Hasil AI": tier["title"], "Level": tier["level"],
+                    })
+                except Exception as ex:
+                    results.append({"Nama": row.get("nama","?"), "Error": str(ex)})
+            prog.empty()
 
-                st.dataframe(df_out, use_container_width=True)
-                csv_out = df_out.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    "⬇️  Unduh Hasil sebagai CSV",
-                    data=csv_out,
-                    file_name=f"hasil_batch_{datetime.date.today()}.csv",
-                    mime="text/csv"
-                )
+            df_out = pd.DataFrame(results)
+            total_b = len(df_out)
+            n_stunt_b = sum(df_out.get("Status TB/U","").str.contains("Pendek", na=False))
+            n_risk_b  = sum("Normal" not in str(r) for r in df_out.get("Hasil AI",[]))
+
+            st.markdown(f"""
+            <div class="metarow" style="margin-top:1rem;">
+                <div class="mpill"><div class="mplabel">Total Anak</div>
+                    <div class="mpval">{total_b}</div><div class="mpsub">dianalisis</div></div>
+                <div class="mpill"><div class="mplabel">Stunting (TB/U)</div>
+                    <div class="mpval" style="color:#f87171;">{n_stunt_b}</div>
+                    <div class="mpsub">ZS TB/U &lt; −2 SD</div></div>
+                <div class="mpill"><div class="mplabel">Risiko AI</div>
+                    <div class="mpval" style="color:#fb923c;">{n_risk_b}</div>
+                    <div class="mpsub">perlu perhatian</div></div>
+                <div class="mpill"><div class="mplabel">Prev. TB/U</div>
+                    <div class="mpval" style="color:#facc15;">{n_stunt_b/total_b*100:.1f}%</div>
+                    <div class="mpsub">dari total</div></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.dataframe(df_out, use_container_width=True)
+            csv_out = df_out.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇️  Unduh Hasil CSV", data=csv_out,
+                               file_name=f"hasil_batch_{datetime.date.today()}.csv", mime="text/csv")
         except Exception as e:
             st.error(f"Error memproses file: {e}")
-
-
-# ═══════════════════════════════════════════════════════════════
-# PAGE 7 — TENTANG MODEL
-# ═══════════════════════════════════════════════════════════════
-elif menu.startswith("📚"):
-    st.markdown('<p class="slabel">Tentang Model & Metodologi</p>', unsafe_allow_html=True)
-
-    # Stats
-    st.markdown("""
-    <div class="stat-grid">
-        <div class="stat-box">
-            <div class="stat-val">92.7%</div>
-            <div class="stat-lbl">Akurasi</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-val">91.4%</div>
-            <div class="stat-lbl">Precision</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-val">90.3%</div>
-            <div class="stat-lbl">Recall</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-val">96.3%</div>
-            <div class="stat-lbl">AUC-ROC</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Metric bar chart
-    fig3, ax3 = plt.subplots(figsize=(9, 3))
-    fig3.patch.set_facecolor("#1a2535"); ax3.set_facecolor("#111827")
-    metrics_lbl = list(MODEL_METRICS.keys())
-    metrics_val = [v*100 for v in MODEL_METRICS.values()]
-    clrs = ["#c9a84c","#4fd1c5","#34d399","#fb923c","#a78bfa"]
-    bars3 = ax3.bar(metrics_lbl, metrics_val, color=clrs, edgecolor="none", width=0.5)
-    for bar, val in zip(bars3, metrics_val):
-        ax3.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.5,
-                 f"{val:.1f}%", ha='center', va='bottom', color="#94a3b8", fontsize=9)
-    ax3.set_ylim(80, 100)
-    ax3.set_title("Performa Model pada Test Set (20% Data)", color="#e8d48b", fontsize=10, fontweight='normal')
-    ax3.tick_params(colors="#64748b", labelsize=9)
-    for sp in ['bottom','left']: ax3.spines[sp].set_color("#1f2d42")
-    for sp in ['top','right']:   ax3.spines[sp].set_visible(False)
-    ax3.grid(axis='y', color="#1f2d42", linestyle="--", linewidth=0.7, alpha=0.7)
-    plt.tight_layout()
-    st.pyplot(fig3, use_container_width=True)
-    plt.close(fig3)
-
-    # Info boxes
-    t1, t2 = st.tabs(["🏗️  Arsitektur Model", "📋  Metodologi & Dasar Hukum"])
-
-    with t1:
-        st.markdown("""
-        <div class="ibox">
-        <div class="ibox-title">Ensemble: CatBoost + XGBoost</div>
-        <div style="font-size:.87rem;color:#94a3b8;line-height:1.9;">
-        <b style="color:#e8d48b;">CatBoost (bobot 45%)</b><br>
-        &nbsp;· iterations=3000, learning_rate=0.01, depth=7, l2_leaf_reg=5<br>
-        &nbsp;· class_weights=[1, 2.0], rsm=0.8, bagging_temperature=0.5<br>
-        &nbsp;· Dioptimasi dengan early stopping (patience=200)<br><br>
-        <b style="color:#e8d48b;">XGBoost (bobot 55%)</b><br>
-        &nbsp;· n_estimators=2000, learning_rate=0.02, max_depth=7<br>
-        &nbsp;· reg_lambda=5, scale_pos_weight=4<br>
-        &nbsp;· Early stopping rounds=100<br><br>
-        <b style="color:#e8d48b;">Penanganan Imbalanced Data</b><br>
-        &nbsp;· Teknik SMOTETomek untuk oversampling kelas minoritas stunting<br>
-        &nbsp;· Threshold optimal dicari melalui optimasi F1-Score (bukan default 0.5)<br><br>
-        <b style="color:#e8d48b;">Validasi</b><br>
-        &nbsp;· 5-Fold Stratified Cross-Validation pada data asli (tanpa SMOTE)<br>
-        &nbsp;· Train/Test split 80/20 dengan stratifikasi
-        </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with t2:
-        st.markdown("""
-        <div class="ibox">
-        <div class="ibox-title">Dasar Hukum & Referensi</div>
-        <div style="font-size:.87rem;color:#94a3b8;line-height:1.9;">
-        <b style="color:#e8d48b;">Permenkes No. 2 Tahun 2020</b> — Standar Antropometri Anak<br>
-        Indeks yang digunakan:<br>
-        &nbsp;· BB/U (Berat Badan menurut Umur) → menilai status gizi umum<br>
-        &nbsp;· TB/U (Tinggi Badan menurut Umur) → TARGET (stunting = ZS &lt; −2 SD)<br>
-        &nbsp;· BB/TB (Berat Badan menurut Tinggi) → menilai wasting<br><br>
-        <b style="color:#e8d48b;">WHO Multicentre Growth Reference Study Group (2006)</b><br>
-        &nbsp;· Tabel referensi LMS untuk Z-Score BB/U dan BB/TB<br>
-        &nbsp;· Kurva pertumbuhan Height-for-Age standar internasional<br><br>
-        <b style="color:#e8d48b;">Feature Engineering (70+ Variabel)</b><br>
-        &nbsp;· Kelompok usia Permenkes: ASI Eksklusif, MPASI, Baduta, Batita, Balita<br>
-        &nbsp;· Window 1000 HPK (0–23 bulan) sebagai periode kritis<br>
-        &nbsp;· Interaksi umur × gizi, jenis kelamin × z-score<br>
-        &nbsp;· Indeks komposit risiko gizi, zona borderline, proximity ke SD ambang
-        </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="ibox" style="margin-top:.8rem;">
-        <div class="ibox-title">⚠️ Disclaimer</div>
-        <div style="font-size:.85rem;color:#94a3b8;line-height:1.8;">
-        Aplikasi ini merupakan <b style="color:#e8d48b;">alat skrining awal berbasis kecerdasan buatan</b>
-        dan <b style="color:#f87171;">tidak menggantikan diagnosis medis profesional</b>.
-        Keputusan klinis harus selalu dikonsultasikan dengan dokter, bidan, atau tenaga
-        kesehatan yang kompeten. Hasil prediksi dipengaruhi oleh akurasi data yang dimasukkan.
-        </div>
-        </div>
-        """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
@@ -1534,9 +1706,8 @@ elif menu.startswith("📚"):
 # ─────────────────────────────────────────────
 st.markdown("""
 <div class="fnote">
-    <span>Permenkes No. 2 Tahun 2020</span> — Standar Antropometri Anak
-    &nbsp;·&nbsp; <span>WHO 2006 Multicentre Growth Reference Study</span>
+    <span>Permenkes No. 2 Tahun 2020</span> — Standar Antropometri Anak &nbsp;·&nbsp;
+    <span>WHO 2006 Multicentre Growth Reference Study</span>
     <br>Model Ensemble CatBoost + XGBoost &nbsp;·&nbsp; Skrining Awal — Bukan Pengganti Diagnosis Medis
 </div>
 """, unsafe_allow_html=True)
-
