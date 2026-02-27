@@ -1146,6 +1146,8 @@ with tab_about:
 st.markdown("""
 <div style="text-align:center;color:#334155;font-size:.7rem;line-height:2;
             padding-top:1.2rem;margin-top:2rem;border-top:1px solid rgba(255,255,255,.05);">
+            <span style="color:#475569;">Andhika Rizky Nur Wahyu | UDINUS</span>
+    &nbsp;·&nbsp;
     <span style="color:#475569;">WHO 2006 Multicentre Growth Reference</span>
     &nbsp;·&nbsp;
     <span style="color:#475569;">Permenkes No. 2 Tahun 2020</span>
@@ -1154,3 +1156,4 @@ st.markdown("""
     <br>Skrining Awal Berbasis AI — Bukan Pengganti Diagnosis Medis
 </div>
 """, unsafe_allow_html=True)
+
