@@ -1153,8 +1153,9 @@ st.markdown("""
     <span style="color:#475569;">Permenkes No. 2 Tahun 2020</span>
     &nbsp;·&nbsp;
     <span style="color:#475569;">Ensemble CatBoost + XGBoost</span>
-    <br>Skrining Awal Berbasis AI — Bukan Pengganti Diagnosis Medis
+    <br>Prediksi Awal Berbasis Data Science — Bukan Pengganti Diagnosis Medis
 </div>
 """, unsafe_allow_html=True)
+
 
 
