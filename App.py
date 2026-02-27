@@ -797,9 +797,22 @@ def load_model():
     mod = types.ModuleType("__main__")
     mod.EnsembleModel = EnsembleModel
     sys.modules["__main__"] = mod
-    model    = joblib.load("model.pkl")
-    features = joblib.load("fitur_training.pkl")
-    return model, features
+    data = joblib.load("model.pkl")
+    # model.pkl adalah dict {model, threshold, features, weights}
+    if isinstance(data, dict):
+        model     = data["model"]
+        threshold = float(data.get("threshold", 0.45))
+        features  = data.get("features", None)
+    else:
+        model     = data
+        threshold = 0.45
+        features  = None
+    if features is None:
+        try:
+            features = joblib.load("fitur_training.pkl")
+        except Exception:
+            features = []
+    return model, threshold, features
 
 
 # =====================================================================
@@ -867,13 +880,13 @@ if predict_btn:
 
     with st.spinner("Menganalisis data antropometri..."):
         try:
-            model, _ = load_model()
+            model, threshold, _ = load_model()
             X_input, zs_bbu, zs_bbtb = build_features(
                 umur_bulan, jk, berat, tinggi, cu_mode
             )
             proba         = model.predict_proba(X_input)[0]
             prob_stunting = proba[1]
-            prediction    = 1 if prob_stunting >= 0.45 else 0
+            prediction    = 1 if prob_stunting >= threshold else 0
         except Exception as e:
             st.error(f"Error saat prediksi: {e}")
             st.stop()
