@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import pickle
 import bisect
 
 # =====================================================================
@@ -10,223 +9,437 @@ import bisect
 # =====================================================================
 st.set_page_config(
     page_title="Prediksi Stunting Balita",
-    page_icon="🌱",
+    page_icon="🌿",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
 # =====================================================================
-# CUSTOM CSS — Aesthetic: Organic Medical / Warm Teal & Cream
+# DESIGN SYSTEM — Luxury Dark Medical
+# Palette: Deep slate navy + warm gold + soft mint
+# Typography: Cormorant Garamond (display) + Outfit (body)
 # =====================================================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Outfit:wght@300;400;500;600&display=swap');
 
+/* ── TOKENS ── */
 :root {
-    --teal:    #0d9488;
-    --teal-lt: #ccfbf1;
-    --teal-md: #14b8a6;
-    --amber:   #f59e0b;
-    --red:     #ef4444;
-    --green:   #22c55e;
-    --cream:   #fefce8;
-    --dark:    #134e4a;
-    --gray:    #6b7280;
-    --bg:      #f0fdfa;
+    --navy:       #0b1120;
+    --navy-2:     #111827;
+    --navy-3:     #1a2535;
+    --navy-4:     #1f2d42;
+    --glass:      rgba(255,255,255,0.04);
+    --glass-b:    rgba(255,255,255,0.07);
+    --gold:       #c9a84c;
+    --gold-lt:    #e8d48b;
+    --gold-dim:   rgba(201,168,76,0.15);
+    --mint:       #4fd1c5;
+    --danger:     #f87171;
+    --danger-dim: rgba(248,113,113,0.12);
+    --success:    #34d399;
+    --success-dim:rgba(52,211,153,0.12);
+    --text-1:     #f1f5f9;
+    --text-2:     #94a3b8;
+    --text-3:     #64748b;
+    --border:     rgba(255,255,255,0.08);
+    --border-gold:rgba(201,168,76,0.3);
 }
 
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif !important;
-    background-color: var(--bg) !important;
+/* ── RESET & BASE ── */
+html, body,
+[class*="css"],
+.stApp,
+.main,
+div[data-testid="stAppViewContainer"],
+div[data-testid="stMain"],
+div[data-testid="stVerticalBlock"] {
+    font-family: 'Outfit', sans-serif !important;
+    background-color: var(--navy) !important;
+    color: var(--text-1) !important;
 }
 
-/* ---- HEADER ---- */
-.hero {
-    background: linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%);
-    border-radius: 24px;
-    padding: 2.5rem 2rem;
-    text-align: center;
-    margin-bottom: 2rem;
+#MainMenu, footer, header { visibility: hidden !important; }
+.block-container {
+    max-width: 720px !important;
+    padding: 2rem 1.5rem 5rem !important;
+}
+
+/* ── HERO ── */
+.hero-wrap {
     position: relative;
+    text-align: center;
+    padding: 3.5rem 2rem 3rem;
+    margin-bottom: 2.8rem;
+    border-radius: 28px;
+    background: var(--navy-3);
+    border: 1px solid var(--border-gold);
     overflow: hidden;
-    box-shadow: 0 20px 60px rgba(13,148,136,.25);
+    animation: fadeDown 0.7s ease both;
 }
-.hero::before {
-    content: '';
-    position: absolute;
-    top: -40px; right: -40px;
-    width: 200px; height: 200px;
-    background: rgba(255,255,255,.08);
-    border-radius: 50%;
+.hero-wrap::before {
+    content:'';
+    position:absolute; inset:0;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%,
+        rgba(201,168,76,.13) 0%, transparent 70%);
+    pointer-events:none;
 }
-.hero::after {
-    content: '';
-    position: absolute;
-    bottom: -60px; left: -30px;
-    width: 250px; height: 250px;
-    background: rgba(255,255,255,.05);
-    border-radius: 50%;
+.hero-wrap::after {
+    content:'';
+    position:absolute; bottom:-1px; left:0; right:0; height:1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
 }
-.hero-icon { font-size: 3rem; margin-bottom: .5rem; }
-.hero h1 {
-    font-family: 'DM Serif Display', serif !important;
-    color: white !important;
-    font-size: 2.2rem !important;
-    font-weight: 400 !important;
-    margin: 0 0 .5rem 0 !important;
-    letter-spacing: -.02em;
+.hero-orb {
+    position:absolute;
+    width:320px; height:320px;
+    border-radius:50%;
+    background: radial-gradient(circle, rgba(79,209,197,.06) 0%, transparent 70%);
+    top:-120px; right:-80px;
+    pointer-events:none;
 }
-.hero p {
-    color: rgba(255,255,255,.85) !important;
-    font-size: 1rem !important;
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    background: var(--gold-dim);
+    border: 1px solid var(--border-gold);
+    color: var(--gold-lt);
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    padding: .35rem .95rem;
+    border-radius: 100px;
+    margin-bottom: 1.5rem;
+}
+.hero-title {
+    font-family: 'Cormorant Garamond', serif !important;
+    font-size: 3rem !important;
     font-weight: 300 !important;
+    letter-spacing: -.03em !important;
+    line-height: 1.1 !important;
+    color: var(--text-1) !important;
+    margin: 0 0 .4rem !important;
+}
+.hero-title em {
+    font-style: italic;
+    color: var(--gold-lt);
+}
+.hero-divider {
+    width: 40px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 1.1rem auto;
+}
+.hero-sub {
+    font-size: .88rem !important;
+    color: var(--text-3) !important;
+    font-weight: 300 !important;
+    letter-spacing: .03em !important;
+    line-height: 1.7 !important;
     margin: 0 !important;
 }
 
-/* ---- CARD ---- */
-.card {
-    background: white;
-    border-radius: 20px;
-    padding: 2rem;
-    box-shadow: 0 4px 24px rgba(13,148,136,.10);
-    margin-bottom: 1.5rem;
-    border: 1px solid rgba(13,148,136,.1);
-}
-.card-title {
-    font-family: 'DM Serif Display', serif;
-    color: var(--dark);
-    font-size: 1.3rem;
-    margin-bottom: 1.2rem;
+/* ── SECTION LABEL ── */
+.section-label {
+    font-size: .65rem;
+    font-weight: 600;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1rem;
+    margin-top: .2rem;
     display: flex;
     align-items: center;
-    gap: .6rem;
+    gap: .7rem;
+}
+.section-label::after {
+    content:''; flex:1; height:1px;
+    background: linear-gradient(90deg, var(--border-gold), transparent);
 }
 
-/* ---- RESULT CARDS ---- */
-.result-normal {
-    background: linear-gradient(135deg, #dcfce7, #bbf7d0);
-    border-left: 5px solid #22c55e;
-    border-radius: 16px;
-    padding: 1.8rem;
-    text-align: center;
+/* ── STREAMLIT WIDGET OVERRIDES ── */
+div[data-testid="stNumberInput"] input {
+    background: var(--navy-3) !important;
+    border: 1.5px solid rgba(255,255,255,0.1) !important;
+    border-radius: 12px !important;
+    color: var(--text-1) !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: .95rem !important;
+    padding: .65rem .9rem !important;
+    transition: border-color .25s, box-shadow .25s !important;
 }
-.result-stunting {
-    background: linear-gradient(135deg, #fef2f2, #fecaca);
-    border-left: 5px solid #ef4444;
-    border-radius: 16px;
-    padding: 1.8rem;
-    text-align: center;
+div[data-testid="stNumberInput"] input:focus {
+    border-color: var(--gold) !important;
+    box-shadow: 0 0 0 3px var(--gold-dim) !important;
+    outline: none !important;
 }
-.result-title {
-    font-family: 'DM Serif Display', serif;
-    font-size: 2rem;
-    margin: .5rem 0;
+div[data-testid="stSelectbox"] > div > div {
+    background: var(--navy-3) !important;
+    border: 1.5px solid rgba(255,255,255,0.1) !important;
+    border-radius: 12px !important;
+    color: var(--text-1) !important;
+    font-family: 'Outfit', sans-serif !important;
 }
-.result-icon { font-size: 2.5rem; }
-.result-prob {
-    font-size: 1rem;
-    font-weight: 500;
-    margin-top: .5rem;
+div[data-testid="stSelectbox"] > div > div:focus-within {
+    border-color: var(--gold) !important;
+    box-shadow: 0 0 0 3px var(--gold-dim) !important;
 }
-
-/* ---- METRIC BOXES ---- */
-.metric-row {
-    display: flex;
-    gap: 1rem;
-    margin-top: 1rem;
-}
-.metric-box {
-    flex: 1;
-    background: var(--bg);
-    border-radius: 14px;
-    padding: 1rem;
-    text-align: center;
-    border: 1px solid rgba(13,148,136,.15);
-}
-.metric-label { font-size: .78rem; color: var(--gray); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
-.metric-value { font-size: 1.5rem; font-weight: 600; color: var(--dark); font-family: 'DM Serif Display', serif; }
-.metric-sub   { font-size: .78rem; color: var(--gray); margin-top: .2rem; }
-
-/* ---- GAUGE BAR ---- */
-.gauge-wrap { margin-top: 1.2rem; }
-.gauge-label { display: flex; justify-content: space-between; font-size: .82rem; color: var(--gray); margin-bottom: .4rem; }
-.gauge-track {
-    height: 12px; border-radius: 8px;
-    background: linear-gradient(to right, #22c55e, #f59e0b 50%, #ef4444);
-    position: relative;
-}
-.gauge-thumb {
-    position: absolute;
-    top: -4px;
-    width: 20px; height: 20px;
-    background: white;
-    border: 3px solid var(--dark);
-    border-radius: 50%;
-    transform: translateX(-50%);
-    box-shadow: 0 2px 8px rgba(0,0,0,.2);
-}
-
-/* ---- INFO BOX ---- */
-.info-box {
-    background: var(--teal-lt);
-    border-radius: 12px;
-    padding: 1rem 1.2rem;
-    font-size: .88rem;
-    color: var(--dark);
-    margin-top: 1rem;
-    line-height: 1.6;
-}
-.info-box strong { color: var(--teal); }
-
-/* ---- STREAMLIT OVERRIDES ---- */
-.stButton > button {
-    background: linear-gradient(135deg, #0f766e, #14b8a6) !important;
-    color: white !important;
-    border: none !important;
+div[data-testid="stSelectbox"] ul {
+    background: var(--navy-4) !important;
+    border: 1px solid var(--border-gold) !important;
     border-radius: 14px !important;
-    padding: .85rem 2rem !important;
-    font-size: 1.05rem !important;
-    font-weight: 600 !important;
+    padding: .4rem !important;
+    box-shadow: 0 16px 48px rgba(0,0,0,.6) !important;
+}
+div[data-testid="stSelectbox"] li {
+    border-radius: 8px !important;
+    font-family: 'Outfit', sans-serif !important;
+    color: var(--text-2) !important;
+}
+div[data-testid="stSelectbox"] li:hover {
+    background: var(--gold-dim) !important;
+    color: var(--gold-lt) !important;
+}
+label[data-testid="stWidgetLabel"] p,
+div[data-testid="stWidgetLabel"] p {
+    color: var(--text-3) !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: .82rem !important;
+    font-weight: 500 !important;
+    letter-spacing: .04em !important;
+    text-transform: uppercase !important;
+}
+div[data-testid="stNumberInput"] button {
+    background: var(--navy-4) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-3) !important;
+    border-radius: 8px !important;
+    transition: color .2s !important;
+}
+div[data-testid="stNumberInput"] button:hover {
+    color: var(--gold) !important;
+}
+
+/* ── CTA BUTTON ── */
+.stButton > button {
     width: 100% !important;
-    letter-spacing: .03em !important;
-    box-shadow: 0 8px 24px rgba(13,148,136,.3) !important;
-    transition: all .3s !important;
-    font-family: 'DM Sans', sans-serif !important;
+    background: linear-gradient(135deg, #9a6e1a 0%, #c9a84c 45%, #e8d48b 100%) !important;
+    color: #0b1120 !important;
+    border: none !important;
+    border-radius: 16px !important;
+    padding: 1.05rem 2rem !important;
+    font-size: .95rem !important;
+    font-weight: 600 !important;
+    letter-spacing: .1em !important;
+    text-transform: uppercase !important;
+    font-family: 'Outfit', sans-serif !important;
+    box-shadow: 0 8px 30px rgba(201,168,76,.3), inset 0 1px 0 rgba(255,255,255,.2) !important;
+    transition: all .3s cubic-bezier(.4,0,.2,1) !important;
+    cursor: pointer !important;
 }
 .stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 12px 32px rgba(13,148,136,.4) !important;
+    transform: translateY(-3px) !important;
+    box-shadow: 0 16px 44px rgba(201,168,76,.4), inset 0 1px 0 rgba(255,255,255,.25) !important;
 }
-.stSelectbox > div > div, .stNumberInput > div > div > input, .stSlider {
+.stButton > button:active {
+    transform: translateY(-1px) !important;
+}
+
+/* ── RESULT PANEL ── */
+.result-panel {
+    border-radius: 24px;
+    padding: 2.4rem 2rem;
+    text-align: center;
+    margin-bottom: 1.4rem;
+    position: relative;
+    overflow: hidden;
+    animation: resultPop 0.65s cubic-bezier(.34,1.56,.64,1) both;
+}
+.rp-normal {
+    background: linear-gradient(160deg, #091a12 0%, #0d2218 100%);
+    border: 1px solid rgba(52,211,153,.25);
+    box-shadow: 0 0 60px rgba(52,211,153,.06);
+}
+.rp-normal::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(ellipse 65% 45% at 50% 0%,
+        rgba(52,211,153,.12) 0%, transparent 70%);
+}
+.rp-stunting {
+    background: linear-gradient(160deg, #1a0909 0%, #220d0d 100%);
+    border: 1px solid rgba(248,113,113,.25);
+    box-shadow: 0 0 60px rgba(248,113,113,.06);
+}
+.rp-stunting::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(ellipse 65% 45% at 50% 0%,
+        rgba(248,113,113,.12) 0%, transparent 70%);
+}
+.rp-eyebrow {
+    font-size: .65rem; font-weight: 600;
+    letter-spacing: .2em; text-transform: uppercase;
+    opacity: .7; margin-bottom: .9rem;
+    position:relative;
+}
+.rp-icon { font-size: 2.6rem; margin-bottom: .5rem; position:relative; line-height:1; }
+.rp-headline {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.5rem; font-weight: 600;
+    letter-spacing: -.03em; line-height: 1;
+    margin-bottom: .45rem; position:relative;
+}
+.rp-prob {
+    font-size: .85rem; font-weight: 400;
+    opacity: .65; position:relative;
+}
+
+/* ── Z-SCORE GRID ── */
+.zs-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1rem; margin-bottom: 1.2rem;
+}
+.zs-card {
+    background: var(--navy-3);
+    border: 1px solid var(--border);
+    border-radius: 18px; padding: 1.4rem 1.1rem;
+    text-align: center;
+    transition: border-color .25s, transform .2s;
+}
+.zs-card:hover { border-color: var(--border-gold); transform: translateY(-2px); }
+.zs-tag {
+    font-size: .63rem; letter-spacing: .16em;
+    text-transform: uppercase; font-weight: 600;
+    color: var(--text-3); margin-bottom: .7rem;
+}
+.zs-val {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.8rem; font-weight: 300; line-height: 1;
+    margin-bottom: .5rem;
+}
+.zs-desc { font-size: .7rem; color: var(--text-3); margin-bottom: .55rem; }
+.zs-badge {
+    font-size: .73rem; font-weight: 500;
+    padding: .28rem .75rem; border-radius: 100px;
+    display: inline-block;
+}
+
+/* ── GAUGE ── */
+.gauge-wrap {
+    background: var(--navy-3);
+    border: 1px solid var(--border);
+    border-radius: 18px; padding: 1.3rem 1.5rem;
+    margin-bottom: 1.2rem;
+}
+.gauge-top {
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom: 1rem;
+}
+.gauge-ttl {
+    font-size: .63rem; letter-spacing: .16em;
+    text-transform: uppercase; font-weight: 600; color: var(--text-3);
+}
+.gauge-num {
+    font-family:'Cormorant Garamond',serif;
+    font-size: 1.7rem; font-weight: 300; line-height: 1;
+}
+.gauge-track {
+    height: 6px; border-radius: 100px;
+    background: rgba(255,255,255,.07); position: relative;
+}
+.gauge-bar {
+    position:absolute; left:0; top:0; height:100%;
+    border-radius:100px;
+    background: linear-gradient(90deg, #34d399 0%, #facc15 55%, #f87171 100%);
+}
+.gauge-pip {
+    position:absolute; top:50%; transform:translate(-50%,-50%);
+    width:14px; height:14px; border-radius:50%;
+    border: 2px solid var(--navy); z-index:2;
+    box-shadow: 0 0 8px currentColor;
+}
+.gauge-ticks {
+    display:flex; justify-content:space-between;
+    margin-top:.6rem; font-size:.67rem; color:var(--text-3);
+}
+
+/* ── META PILLS ── */
+.meta-row {
+    display:flex; gap:.9rem; margin-bottom:1.2rem;
+}
+.meta-pill {
+    flex:1; background:var(--navy-3);
+    border:1px solid var(--border); border-radius:14px;
+    padding:.95rem .7rem; text-align:center;
+    transition: border-color .2s;
+}
+.meta-pill:hover { border-color: var(--border-gold); }
+.mp-label { font-size:.6rem; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); font-weight:600; }
+.mp-val {
+    font-family:'Cormorant Garamond',serif;
+    font-size:1.45rem; font-weight:300; color:var(--text-1);
+    margin:.25rem 0 .15rem; line-height:1;
+}
+.mp-sub { font-size:.67rem; color:var(--text-3); }
+
+/* ── REC STRIP ── */
+.rec-strip {
+    background: var(--navy-3);
+    border:1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    border-radius: 14px; padding: 1.15rem 1.3rem;
+    font-size: .87rem; line-height: 1.7;
+    color: var(--text-2); margin-bottom: 1rem;
+}
+.rec-acc { color: var(--gold-lt); font-weight: 500; }
+.rec-disc { font-size: .76rem; color: var(--text-3); margin-top: .65rem; font-style: italic; }
+
+/* ── ALERT OVERRIDE ── */
+div[data-testid="stAlert"] {
+    background: rgba(201,168,76,.08) !important;
+    border: 1px solid var(--border-gold) !important;
     border-radius: 12px !important;
+    color: var(--gold-lt) !important;
+    font-family:'Outfit',sans-serif !important;
+    font-size:.87rem !important;
 }
-div[data-testid="stNumberInput"] input {
-    border-radius: 10px !important;
-    border: 1.5px solid #d1fae5 !important;
-    background: #f0fdfa !important;
+
+/* ── SPINNER ── */
+div[data-testid="stSpinner"] p {
+    color: var(--text-2) !important;
+    font-family:'Outfit',sans-serif !important;
 }
-div[data-testid="stSelectbox"] > div {
-    border-radius: 10px !important;
-    border: 1.5px solid #d1fae5 !important;
-    background: #f0fdfa !important;
+
+/* ── FOOTER ── */
+.footer-note {
+    text-align:center; color:var(--text-3);
+    font-size:.74rem; line-height:1.9;
+    padding-top:1.8rem; margin-top:3rem;
+    border-top:1px solid var(--border);
 }
-label[data-testid="stWidgetLabel"] p {
-    font-weight: 500 !important;
-    color: #134e4a !important;
+.footer-note span { color:var(--text-2); }
+.footer-dot { opacity:.4; margin:0 .4rem; }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeDown {
+    from { opacity:0; transform:translateY(-18px); }
+    to   { opacity:1; transform:translateY(0); }
 }
-.stAlert { border-radius: 14px !important; }
-footer { display: none; }
-#MainMenu { display: none; }
-.block-container { max-width: 700px !important; padding-top: 1.5rem !important; }
+@keyframes fadeUp {
+    from { opacity:0; transform:translateY(14px); }
+    to   { opacity:1; transform:translateY(0); }
+}
+@keyframes resultPop {
+    from { opacity:0; transform:scale(.93); }
+    to   { opacity:1; transform:scale(1); }
+}
 </style>
 """, unsafe_allow_html=True)
 
+
 # =====================================================================
 # WHO 2006 GROWTH STANDARDS — LMS Reference Tables
-# Source: WHO Multicentre Growth Reference Study Group
 # =====================================================================
 
-# Weight-for-Age (kg): boys — columns: [Month, L, M, S]
 WFA_BOYS = [
     [0,0.3487,3.3464,0.14602],[1,0.2297,4.4709,0.13395],[2,0.1970,5.5675,0.12385],
     [3,0.1738,6.3762,0.11578],[4,0.1553,7.0023,0.10943],[5,0.1395,7.5105,0.10452],
@@ -251,7 +464,6 @@ WFA_BOYS = [
     [60,-0.1650,19.0074,0.13208]
 ]
 
-# Weight-for-Age (kg): girls
 WFA_GIRLS = [
     [0,0.3809,3.2322,0.14171],[1,0.1714,4.1873,0.13724],[2,0.0962,5.1282,0.13000],
     [3,0.0569,5.8458,0.12516],[4,0.0372,6.4237,0.12059],[5,0.0247,6.8985,0.11750],
@@ -276,8 +488,6 @@ WFA_GIRLS = [
     [60,-0.2308,18.2298,0.15705]
 ]
 
-# Weight-for-Length/Height (kg): boys — [length_cm, L, M, S]
-# Length 45–110 cm (WFL), Height 65–120 cm (WFH)
 WFL_BOYS = [
     [45.0,-0.3521,2.441,0.09182],[45.5,-0.3521,2.504,0.09076],[46.0,-0.3521,2.570,0.08969],
     [46.5,-0.3521,2.640,0.08864],[47.0,-0.3521,2.713,0.08763],[47.5,-0.3521,2.790,0.08664],
@@ -372,33 +582,30 @@ WFL_GIRLS = [
     [109.5,-0.3833,13.995,0.12383],[110.0,-0.3833,14.093,0.12490]
 ]
 
+
 # =====================================================================
-# WHO Z-SCORE CALCULATION
+# WHO Z-SCORE FUNCTIONS
 # =====================================================================
 
 def lms_zscore(X, L, M, S):
-    """Calculate WHO Z-score using LMS method."""
     if L == 0:
         z = np.log(X / M) / S
     else:
         z = ((X / M) ** L - 1) / (L * S)
-    # SD3pos/SD3neg correction for |z| > 3
     if z > 3:
-        SD3pos = M * (1 + L * S * 3) ** (1 / L)
+        SD3pos  = M * (1 + L * S * 3) ** (1 / L)
         SD23pos = SD3pos - M * (1 + L * S * 2) ** (1 / L)
         z = 3 + (X - SD3pos) / SD23pos
     elif z < -3:
-        SD3neg = M * (1 + L * S * (-3)) ** (1 / L)
+        SD3neg  = M * (1 + L * S * (-3)) ** (1 / L)
         SD23neg = M * (1 + L * S * (-2)) ** (1 / L) - SD3neg
         z = -3 + (X - SD3neg) / SD23neg
     return round(z, 2)
 
 
 def get_lms_by_age(age_months, sex):
-    """Get LMS values for weight-for-age."""
     table = WFA_BOYS if sex == 'L' else WFA_GIRLS
-    age = int(round(age_months))
-    age = max(0, min(60, age))
+    age = max(0, min(60, int(round(age_months))))
     for row in table:
         if int(row[0]) == age:
             return row[1], row[2], row[3]
@@ -406,7 +613,6 @@ def get_lms_by_age(age_months, sex):
 
 
 def get_lms_by_height(height_cm, sex):
-    """Get LMS values for weight-for-length/height (interpolated)."""
     table = WFL_BOYS if sex == 'L' else WFL_GIRLS
     heights = [r[0] for r in table]
     h = max(heights[0], min(heights[-1], height_cm))
@@ -414,12 +620,11 @@ def get_lms_by_height(height_cm, sex):
     if idx >= len(table):
         idx = len(table) - 1
     elif idx > 0:
-        # interpolate
         h0, h1 = heights[idx-1], heights[idx]
         t = (h - h0) / (h1 - h0) if h1 != h0 else 0
-        L = table[idx-1][1] + t * (table[idx][1] - table[idx-1][1])
-        M = table[idx-1][2] + t * (table[idx][2] - table[idx-1][2])
-        S = table[idx-1][3] + t * (table[idx][3] - table[idx-1][3])
+        L = table[idx-1][1] + t*(table[idx][1]-table[idx-1][1])
+        M = table[idx-1][2] + t*(table[idx][2]-table[idx-1][2])
+        S = table[idx-1][3] + t*(table[idx][3]-table[idx-1][3])
         return L, M, S
     return table[idx][1], table[idx][2], table[idx][3]
 
@@ -430,38 +635,31 @@ def compute_zscore_bbu(weight, age_months, sex):
 
 
 def compute_zscore_bbtb(weight, height_cm, sex, cara_ukur, age_months):
-    """
-    Permenkes / WHO: adjust height by 0.7 cm if measurement mode
-    doesn't match recommended mode for age.
-    """
     h = height_cm
     if cara_ukur == 'Terlentang' and age_months >= 24:
-        h = height_cm - 0.7   # convert panjang badan → tinggi badan
+        h = height_cm - 0.7
     elif cara_ukur == 'Berdiri' and age_months < 24:
-        h = height_cm + 0.7   # convert tinggi badan → panjang badan
+        h = height_cm + 0.7
     L, M, S = get_lms_by_height(h, sex)
     return lms_zscore(weight, L, M, S)
 
 
 # =====================================================================
-# FEATURE ENGINEERING — replicate notebook pipeline
+# FEATURE ENGINEERING
 # =====================================================================
 
 def build_features(umur_bulan, jk, berat, tinggi, cara_ukur):
-    """Build all 70+ features from raw inputs."""
     zs_bb_u  = compute_zscore_bbu(berat, umur_bulan, jk)
     zs_bb_tb = compute_zscore_bbtb(berat, tinggi, jk, cara_ukur, umur_bulan)
 
-    jk_enc = 1 if jk == 'L' else 0
+    jk_enc   = 1 if jk == 'L' else 0
     cara_enc = 1 if cara_ukur == 'Berdiri' else 0
 
-    # Kelompok usia
     bins = [-1, 6, 11, 23, 36, 60]
-    labels = [0, 1, 2, 3, 4]
-    kel = 0
+    kel  = 0
     for i in range(len(bins)-1):
         if umur_bulan > bins[i] and umur_bulan <= bins[i+1]:
-            kel = labels[i]
+            kel = [0,1,2,3,4][i]
 
     f_window = 1 if umur_bulan <= 23 else 0
     f_mpasi  = 1 if 6 <= umur_bulan <= 23 else 0
@@ -469,23 +667,20 @@ def build_features(umur_bulan, jk, berat, tinggi, cara_ukur):
     age_sq   = umur_bulan ** 2
     age_log  = np.log1p(umur_bulan)
 
-    # BB/U flags
-    f_bb_sk  = 1 if zs_bb_u < -3 else 0
-    f_bb_k   = 1 if -3 <= zs_bb_u < -2 else 0
-    f_bb_n   = 1 if -2 <= zs_bb_u <= 1 else 0
-    f_bb_rl  = 1 if zs_bb_u > 1 else 0
-    f_uw     = 1 if zs_bb_u < -2 else 0
+    f_bb_sk = 1 if zs_bb_u < -3 else 0
+    f_bb_k  = 1 if -3 <= zs_bb_u < -2 else 0
+    f_bb_n  = 1 if -2 <= zs_bb_u <= 1 else 0
+    f_bb_rl = 1 if zs_bb_u > 1 else 0
+    f_uw    = 1 if zs_bb_u < -2 else 0
 
-    # BB/TB flags
-    f_gb   = 1 if zs_bb_tb < -3 else 0
-    f_gk   = 1 if -3 <= zs_bb_tb < -2 else 0
-    f_gbk  = 1 if -2 <= zs_bb_tb <= 1 else 0
-    f_rgl  = 1 if 1 < zs_bb_tb <= 2 else 0
-    f_gl   = 1 if 2 < zs_bb_tb <= 3 else 0
-    f_ob   = 1 if zs_bb_tb > 3 else 0
-    f_wst  = 1 if zs_bb_tb < -2 else 0
+    f_gb  = 1 if zs_bb_tb < -3 else 0
+    f_gk  = 1 if -3 <= zs_bb_tb < -2 else 0
+    f_gbk = 1 if -2 <= zs_bb_tb <= 1 else 0
+    f_rgl = 1 if 1 < zs_bb_tb <= 2 else 0
+    f_gl  = 1 if 2 < zs_bb_tb <= 3 else 0
+    f_ob  = 1 if zs_bb_tb > 3 else 0
+    f_wst = 1 if zs_bb_tb < -2 else 0
 
-    # Borderline
     f_bb_mild   = 1 if -2.5 <= zs_bb_u < -2 else 0
     f_bbtb_mild = 1 if -2.5 <= zs_bb_tb < -2 else 0
     prox_bbu2   = max(0, zs_bb_u - (-2))
@@ -493,95 +688,76 @@ def build_features(umur_bulan, jk, berat, tinggi, cara_ukur):
     prox_bbu3   = max(0, zs_bb_u - (-3))
     prox_bbtb3  = max(0, zs_bb_tb - (-3))
 
-    # Komposit
     f_double = 1 if f_uw == 1 and f_wst == 1 else 0
     f_dsev   = 1 if f_bb_sk == 1 and f_gb == 1 else 0
     f_any_sv = 1 if f_bb_sk == 1 or f_gb == 1 else 0
     skor     = f_bb_sk*2 + f_bb_k + f_gb*2 + f_gk
     jml_idx  = (1 if f_uw else 0) + (1 if f_wst else 0)
 
-    # Z-score combinations
-    avg_z  = (zs_bb_u + zs_bb_tb) / 2
-    min_z  = min(zs_bb_u, zs_bb_tb)
-    max_z  = max(zs_bb_u, zs_bb_tb)
-    gap    = zs_bb_u - zs_bb_tb
-    abs_g  = abs(gap)
-    prod   = zs_bb_u * zs_bb_tb
-    # harmonic: handle divide-by-zero
-    if zs_bb_u != 0 and zs_bb_tb != 0:
-        harm = 2 * zs_bb_u * zs_bb_tb / (zs_bb_u + zs_bb_tb)
-    else:
-        harm = 0.0
-    bbu_sq = zs_bb_u ** 2
-    bbtb_sq = zs_bb_tb ** 2
-    bbu_cb = zs_bb_u ** 3
-    bbtb_cb = zs_bb_tb ** 3
+    avg_z    = (zs_bb_u + zs_bb_tb) / 2
+    min_z    = min(zs_bb_u, zs_bb_tb)
+    max_z    = max(zs_bb_u, zs_bb_tb)
+    gap      = zs_bb_u - zs_bb_tb
+    abs_g    = abs(gap)
+    prod     = zs_bb_u * zs_bb_tb
+    harm     = (2*zs_bb_u*zs_bb_tb/(zs_bb_u+zs_bb_tb)) if (zs_bb_u!=0 and zs_bb_tb!=0) else 0.0
+    bbu_sq   = zs_bb_u ** 2
+    bbtb_sq  = zs_bb_tb ** 2
+    bbu_cb   = zs_bb_u ** 3
+    bbtb_cb  = zs_bb_tb ** 3
 
-    # Umur × Gizi
     umur_x_risiko = umur_bulan * skor
     umur_x_minzs  = umur_bulan * min_z
     umur_x_bbu    = umur_bulan * zs_bb_u
     umur_x_bbtb   = umur_bulan * zs_bb_tb
     bad_x_wst     = f_baduta * f_wst
-    mpa_x_uw      = f_mpasi * f_uw
+    mpa_x_uw      = f_mpasi  * f_uw
 
-    # JK × Gizi
     jk_x_minzs  = jk_enc * min_z
     jk_x_bbu    = jk_enc * zs_bb_u
     jk_x_risiko = jk_enc * skor
 
-    # Antropometri langsung
-    bmi_proxy    = berat / (tinggi / 100) ** 2
-    rasio_bb_tb  = berat / tinggi
-    rasio_tb_um  = tinggi / umur_bulan if umur_bulan > 0 else 0
-    rasio_bb_um  = berat / umur_bulan  if umur_bulan > 0 else 0
+    bmi_proxy   = berat / (tinggi/100)**2
+    rasio_bb_tb = berat / tinggi
+    rasio_tb_um = tinggi / umur_bulan if umur_bulan > 0 else 0
+    rasio_bb_um = berat  / umur_bulan if umur_bulan > 0 else 0
 
-    # Rank (percentile of z-score, approximated by sigmoid)
     rank_bbu  = float(1 / (1 + np.exp(-zs_bb_u)))
     rank_bbtb = float(1 / (1 + np.exp(-zs_bb_tb)))
 
     row = {
-        'umur_bulan': umur_bulan, 'jk_encoded': jk_enc, 'cara_ukur_encoded': cara_enc,
-        'kel_usia_permenkes': float(kel), 'f_window_1000hpk': f_window,
-        'f_masa_mpasi': f_mpasi, 'f_baduta': f_baduta,
-        'age_sq': age_sq, 'age_log': age_log,
-        'zs_bb_u': zs_bb_u,
-        'f_bb_sangat_kurang': f_bb_sk, 'f_bb_kurang': f_bb_k,
-        'f_bb_normal': f_bb_n, 'f_bb_risiko_lebih': f_bb_rl, 'f_underweight': f_uw,
-        'zs_bb_tb': zs_bb_tb,
-        'f_gizi_buruk': f_gb, 'f_gizi_kurang': f_gk, 'f_gizi_baik': f_gbk,
-        'f_risiko_gizi_lebih': f_rgl, 'f_gizi_lebih': f_gl, 'f_obesitas': f_ob,
-        'f_wasting': f_wst,
-        'f_bb_mild': f_bb_mild, 'f_bbtb_mild': f_bbtb_mild,
-        'prox_bbu_ke_minus2': prox_bbu2, 'prox_bbtb_ke_minus2': prox_bbtb2,
-        'prox_bbu_ke_minus3': prox_bbu3, 'prox_bbtb_ke_minus3': prox_bbtb3,
-        'f_double_malnutrisi': f_double, 'f_double_severe': f_dsev, 'f_any_severe': f_any_sv,
-        'skor_risiko_gizi': skor, 'jml_indeks_masalah': jml_idx,
-        'avg_zs_bbu_bbtb': avg_z, 'min_zs_bbu_bbtb': min_z, 'max_zs_bbu_bbtb': max_z,
-        'gap_bbu_bbtb': gap, 'abs_gap_bbu_bbtb': abs_g, 'product_zs': prod,
-        'harmonic_zs': harm,
-        'zs_bbu_sq': bbu_sq, 'zs_bbtb_sq': bbtb_sq, 'zs_bbu_cb': bbu_cb, 'zs_bbtb_cb': bbtb_cb,
-        'umur_x_risiko': umur_x_risiko, 'umur_x_minzs': umur_x_minzs,
-        'umur_x_bbu': umur_x_bbu, 'umur_x_bbtb': umur_x_bbtb,
-        'baduta_x_wasting': bad_x_wst, 'mpasi_x_underw': mpa_x_uw,
-        'jk_x_minzs': jk_x_minzs, 'jk_x_bbu': jk_x_bbu, 'jk_x_risiko': jk_x_risiko,
-        'bmi_proxy': bmi_proxy, 'rasio_bb_tb': rasio_bb_tb,
-        'rasio_tb_umur': rasio_tb_um, 'rasio_bb_umur': rasio_bb_um,
-        'berat': berat, 'tinggi': tinggi,
-        'rank_bbu': rank_bbu, 'rank_bbtb': rank_bbtb
+        'umur_bulan':umur_bulan,'jk_encoded':jk_enc,'cara_ukur_encoded':cara_enc,
+        'kel_usia_permenkes':float(kel),'f_window_1000hpk':f_window,
+        'f_masa_mpasi':f_mpasi,'f_baduta':f_baduta,'age_sq':age_sq,'age_log':age_log,
+        'zs_bb_u':zs_bb_u,'f_bb_sangat_kurang':f_bb_sk,'f_bb_kurang':f_bb_k,
+        'f_bb_normal':f_bb_n,'f_bb_risiko_lebih':f_bb_rl,'f_underweight':f_uw,
+        'zs_bb_tb':zs_bb_tb,'f_gizi_buruk':f_gb,'f_gizi_kurang':f_gk,'f_gizi_baik':f_gbk,
+        'f_risiko_gizi_lebih':f_rgl,'f_gizi_lebih':f_gl,'f_obesitas':f_ob,'f_wasting':f_wst,
+        'f_bb_mild':f_bb_mild,'f_bbtb_mild':f_bbtb_mild,
+        'prox_bbu_ke_minus2':prox_bbu2,'prox_bbtb_ke_minus2':prox_bbtb2,
+        'prox_bbu_ke_minus3':prox_bbu3,'prox_bbtb_ke_minus3':prox_bbtb3,
+        'f_double_malnutrisi':f_double,'f_double_severe':f_dsev,'f_any_severe':f_any_sv,
+        'skor_risiko_gizi':skor,'jml_indeks_masalah':jml_idx,
+        'avg_zs_bbu_bbtb':avg_z,'min_zs_bbu_bbtb':min_z,'max_zs_bbu_bbtb':max_z,
+        'gap_bbu_bbtb':gap,'abs_gap_bbu_bbtb':abs_g,'product_zs':prod,'harmonic_zs':harm,
+        'zs_bbu_sq':bbu_sq,'zs_bbtb_sq':bbtb_sq,'zs_bbu_cb':bbu_cb,'zs_bbtb_cb':bbtb_cb,
+        'umur_x_risiko':umur_x_risiko,'umur_x_minzs':umur_x_minzs,
+        'umur_x_bbu':umur_x_bbu,'umur_x_bbtb':umur_x_bbtb,
+        'baduta_x_wasting':bad_x_wst,'mpasi_x_underw':mpa_x_uw,
+        'jk_x_minzs':jk_x_minzs,'jk_x_bbu':jk_x_bbu,'jk_x_risiko':jk_x_risiko,
+        'bmi_proxy':bmi_proxy,'rasio_bb_tb':rasio_bb_tb,
+        'rasio_tb_umur':rasio_tb_um,'rasio_bb_umur':rasio_bb_um,
+        'berat':berat,'tinggi':tinggi,'rank_bbu':rank_bbu,'rank_bbtb':rank_bbtb
     }
 
     features = [
         'umur_bulan','jk_encoded','cara_ukur_encoded',
         'kel_usia_permenkes','f_window_1000hpk','f_masa_mpasi','f_baduta',
-        'age_sq','age_log',
-        'zs_bb_u',
+        'age_sq','age_log','zs_bb_u',
         'f_bb_sangat_kurang','f_bb_kurang','f_bb_normal','f_bb_risiko_lebih','f_underweight',
-        'zs_bb_tb',
-        'f_gizi_buruk','f_gizi_kurang','f_gizi_baik',
+        'zs_bb_tb','f_gizi_buruk','f_gizi_kurang','f_gizi_baik',
         'f_risiko_gizi_lebih','f_gizi_lebih','f_obesitas','f_wasting',
-        'f_bb_mild','f_bbtb_mild',
-        'prox_bbu_ke_minus2','prox_bbtb_ke_minus2',
+        'f_bb_mild','f_bbtb_mild','prox_bbu_ke_minus2','prox_bbtb_ke_minus2',
         'prox_bbu_ke_minus3','prox_bbtb_ke_minus3',
         'f_double_malnutrisi','f_double_severe','f_any_severe',
         'skor_risiko_gizi','jml_indeks_masalah',
@@ -592,8 +768,7 @@ def build_features(umur_bulan, jk, berat, tinggi, cara_ukur):
         'baduta_x_wasting','mpasi_x_underw',
         'jk_x_minzs','jk_x_bbu','jk_x_risiko',
         'bmi_proxy','rasio_bb_tb','rasio_tb_umur','rasio_bb_umur',
-        'berat','tinggi',
-        'rank_bbu','rank_bbtb'
+        'berat','tinggi','rank_bbu','rank_bbtb'
     ]
     df = pd.DataFrame([row])[features]
     df = df.replace([np.inf, -np.inf], np.nan).fillna(0)
@@ -601,7 +776,7 @@ def build_features(umur_bulan, jk, berat, tinggi, cara_ukur):
 
 
 # =====================================================================
-# LOAD MODEL
+# MODEL LOADER
 # =====================================================================
 
 class EnsembleModel:
@@ -618,181 +793,236 @@ class EnsembleModel:
 
 @st.cache_resource
 def load_model():
-    import builtins
     import sys, types
-    # inject EnsembleModel into __main__ so pickle can find it
     mod = types.ModuleType("__main__")
     mod.EnsembleModel = EnsembleModel
     sys.modules["__main__"] = mod
-    model = joblib.load("model.pkl")
+    model    = joblib.load("model.pkl")
     features = joblib.load("fitur_training.pkl")
     return model, features
 
 
 # =====================================================================
-# UI — HERO
+# ── HERO SECTION ──
 # =====================================================================
 st.markdown("""
-<div class="hero">
-    <div class="hero-icon">🌱</div>
-    <h1>Deteksi Stunting Balita</h1>
-    <p>Sistem prediksi berbasis AI • Berdasarkan Permenkes No. 2 Tahun 2020</p>
+<div class="hero-wrap">
+    <div class="hero-orb"></div>
+    <div class="hero-badge">🌿 &nbsp; Sistem Skrining AI · Berbasis Machine Learning</div>
+    <h1 class="hero-title">Prediksi <em>Stunting</em> Balita</h1>
+    <div class="hero-divider"></div>
+    <p class="hero-sub">
+        Analisis antropometri menggunakan WHO 2006 Growth Standards<br>
+        Sesuai Permenkes No. 2 Tahun 2020 &nbsp;·&nbsp; Ensemble CatBoost + XGBoost
+    </p>
 </div>
 """, unsafe_allow_html=True)
 
+
 # =====================================================================
-# INPUT FORM
+# ── INPUT FORM ──
 # =====================================================================
-st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown('<div class="card-title">📋 Data Anak</div>', unsafe_allow_html=True)
+st.markdown('<p class="section-label">Data Antropometri Anak</p>', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 with col1:
     umur_bulan = st.number_input(
-        "🗓️ Umur (Bulan)", min_value=0, max_value=60, value=24, step=1,
-        help="Usia anak dalam bulan (0–60 bulan)"
+        "Umur (Bulan)", min_value=0, max_value=60, value=24, step=1,
+        help="Usia anak 0–60 bulan"
+    )
+    berat = st.number_input(
+        "Berat Badan (kg)", min_value=1.0, max_value=35.0,
+        value=12.0, step=0.1, format="%.1f"
     )
     jenis_kelamin = st.selectbox(
-        "👶 Jenis Kelamin",
-        options=["Laki-laki", "Perempuan"]
+        "Jenis Kelamin", options=["Laki-laki", "Perempuan"]
+    )
+with col2:
+    tinggi = st.number_input(
+        "Tinggi / Panjang Badan (cm)", min_value=40.0, max_value=130.0,
+        value=87.0, step=0.1, format="%.1f"
     )
     cara_ukur = st.selectbox(
-        "📏 Cara Pengukuran",
-        options=["Terlentang (Panjang Badan)", "Berdiri (Tinggi Badan)"],
-        help="Terlentang untuk usia < 24 bln, Berdiri untuk ≥ 24 bln"
+        "Cara Pengukuran",
+        options=["Terlentang — Panjang Badan", "Berdiri — Tinggi Badan"],
+        help="Terlentang < 24 bln  ·  Berdiri ≥ 24 bln"
     )
 
-with col2:
-    berat = st.number_input(
-        "⚖️ Berat Badan (kg)", min_value=1.0, max_value=35.0,
-        value=12.0, step=0.1, format="%.1f",
-        help="Berat badan anak dalam kilogram"
-    )
-    tinggi = st.number_input(
-        "📐 Tinggi/Panjang Badan (cm)", min_value=40.0, max_value=130.0,
-        value=87.0, step=0.1, format="%.1f",
-        help="Tinggi atau panjang badan anak dalam cm"
-    )
+# Guidance warning
+cu_mode = "Berdiri" if cara_ukur.startswith("Berdiri") else "Terlentang"
+if umur_bulan < 24 and cu_mode == "Berdiri":
+    st.warning("Untuk usia < 24 bulan, disarankan pengukuran Terlentang (panjang badan).")
+elif umur_bulan >= 24 and cu_mode == "Terlentang":
+    st.warning("Untuk usia ≥ 24 bulan, disarankan pengukuran Berdiri (tinggi badan).")
 
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown("<div style='height:.6rem'></div>", unsafe_allow_html=True)
+predict_btn = st.button("Analisis & Prediksi Sekarang")
 
-# Auto-suggest cara ukur
-if umur_bulan < 24 and cara_ukur.startswith("Berdiri"):
-    st.warning("⚠️ Untuk anak usia < 24 bulan, disarankan pengukuran **Terlentang** (panjang badan).")
-elif umur_bulan >= 24 and cara_ukur.startswith("Terlentang"):
-    st.warning("⚠️ Untuk anak usia ≥ 24 bulan, disarankan pengukuran **Berdiri** (tinggi badan).")
 
 # =====================================================================
-# PREDICT BUTTON
+# ── RESULTS ──
 # =====================================================================
-predict_btn = st.button("🔍 Prediksi Sekarang", use_container_width=True)
-
 if predict_btn:
     jk = "L" if jenis_kelamin == "Laki-laki" else "P"
-    cu = "Berdiri" if cara_ukur.startswith("Berdiri") else "Terlentang"
 
-    with st.spinner("Menganalisis data..."):
+    with st.spinner("Menganalisis data antropometri..."):
         try:
             model, _ = load_model()
-            X_input, zs_bbu, zs_bbtb = build_features(umur_bulan, jk, berat, tinggi, cu)
-
-            proba = model.predict_proba(X_input)[0]
+            X_input, zs_bbu, zs_bbtb = build_features(
+                umur_bulan, jk, berat, tinggi, cu_mode
+            )
+            proba         = model.predict_proba(X_input)[0]
             prob_stunting = proba[1]
-            threshold = 0.45  # default; adjust if notebook specified one
-            prediction = 1 if prob_stunting >= threshold else 0
-
+            prediction    = 1 if prob_stunting >= 0.45 else 0
         except Exception as e:
-            st.error(f"❌ Error saat prediksi: {e}")
+            st.error(f"Error saat prediksi: {e}")
             st.stop()
 
-    # ---- RESULT ----
+    pct = prob_stunting * 100
+    st.markdown("<div style='height:.6rem'></div>", unsafe_allow_html=True)
+    st.markdown('<p class="section-label">Hasil Analisis</p>', unsafe_allow_html=True)
+
+    # ── RESULT PANEL ──
     if prediction == 1:
-        status_class = "result-stunting"
-        icon = "⚠️"
-        status_text = "Risiko Stunting"
-        status_color = "#ef4444"
-        rec = "Segera konsultasikan ke tenaga kesehatan (dokter/puskesmas) untuk penanganan lebih lanjut."
+        rp_cls    = "rp-stunting"
+        rp_icon   = "⚠️"
+        rp_title  = "Risiko Stunting Terdeteksi"
+        rp_color  = "#f87171"
+        rp_eyeb   = "Perhatian · Tindak Lanjut Diperlukan"
+        rec_main  = "Segera konsultasikan ke tenaga kesehatan untuk intervensi gizi dan pemantauan tumbuh kembang yang lebih komprehensif."
     else:
-        status_class = "result-normal"
-        icon = "✅"
-        status_text = "Status Normal"
-        status_color = "#22c55e"
-        rec = "Pertahankan pola makan bergizi seimbang dan lakukan pemantauan tumbuh kembang secara rutin."
+        rp_cls    = "rp-normal"
+        rp_icon   = "✓"
+        rp_title  = "Tumbuh Kembang Normal"
+        rp_color  = "#34d399"
+        rp_eyeb   = "Status Pertumbuhan · Baik"
+        rec_main  = "Pertahankan asupan gizi seimbang, ASI/MPASI sesuai usia, dan lakukan pemantauan rutin di posyandu atau fasilitas kesehatan."
 
     st.markdown(f"""
-    <div class="{status_class}" style="margin-bottom:1.5rem;">
-        <div class="result-icon">{icon}</div>
-        <div class="result-title" style="color:{status_color};">{status_text}</div>
-        <div class="result-prob">Probabilitas Stunting: <strong>{prob_stunting*100:.1f}%</strong></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Z-Score metrics
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="card-title">📊 Indikator Gizi WHO</div>', unsafe_allow_html=True)
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        bbu_cat = "Sangat Kurang" if zs_bbu < -3 else ("Kurang" if zs_bbu < -2 else ("Normal" if zs_bbu <= 1 else "Risiko Lebih"))
-        st.markdown(f"""
-        <div class="metric-box">
-            <div class="metric-label">Z-Score BB/U</div>
-            <div class="metric-value" style="color:{'#ef4444' if zs_bbu < -2 else '#22c55e'};">{zs_bbu:+.2f}</div>
-            <div class="metric-sub">Berat Badan / Umur<br><strong>{bbu_cat}</strong></div>
-        </div>""", unsafe_allow_html=True)
-    with col_b:
-        bbtb_cat = "Gizi Buruk" if zs_bbtb < -3 else ("Gizi Kurang" if zs_bbtb < -2 else ("Gizi Baik" if zs_bbtb <= 1 else "Risiko Lebih/Obesitas"))
-        st.markdown(f"""
-        <div class="metric-box">
-            <div class="metric-label">Z-Score BB/TB</div>
-            <div class="metric-value" style="color:{'#ef4444' if zs_bbtb < -2 else '#22c55e'};">{zs_bbtb:+.2f}</div>
-            <div class="metric-sub">Berat Badan / Tinggi<br><strong>{bbtb_cat}</strong></div>
-        </div>""", unsafe_allow_html=True)
-
-    # Probability gauge
-    pct = int(prob_stunting * 100)
-    left_pct = max(0, min(95, pct))
-    st.markdown(f"""
-    <div class="gauge-wrap">
-        <div class="gauge-label"><span>Normal (0%)</span><span>Stunting (100%)</span></div>
-        <div class="gauge-track">
-            <div class="gauge-thumb" style="left:{left_pct}%;"></div>
+    <div class="result-panel {rp_cls}">
+        <div class="rp-eyebrow" style="color:{rp_color};">{rp_eyeb}</div>
+        <div class="rp-icon">{rp_icon}</div>
+        <div class="rp-headline" style="color:{rp_color};">{rp_title}</div>
+        <div class="rp-prob">Probabilitas stunting &nbsp;&mdash;&nbsp;
+            <strong style="color:{rp_color}; font-size:1rem;">{pct:.1f}%</strong>
         </div>
     </div>
     """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Recommendation
+    # ── Z-SCORE CARDS ──
+    def bbu_style(z):
+        if z < -3:  return "Sangat Kurang", "#f87171", "rgba(248,113,113,.14)"
+        if z < -2:  return "Kurang",         "#fb923c", "rgba(251,146,60,.14)"
+        if z <= 1:  return "Normal",          "#34d399", "rgba(52,211,153,.14)"
+        return             "Risiko Lebih",   "#facc15", "rgba(250,204,21,.14)"
+
+    def bbtb_style(z):
+        if z < -3:  return "Gizi Buruk",     "#f87171", "rgba(248,113,113,.14)"
+        if z < -2:  return "Gizi Kurang",    "#fb923c", "rgba(251,146,60,.14)"
+        if z <= 1:  return "Gizi Baik",      "#34d399", "rgba(52,211,153,.14)"
+        if z <= 2:  return "Risiko Lebih",   "#facc15", "rgba(250,204,21,.14)"
+        if z <= 3:  return "Gizi Lebih",     "#f97316", "rgba(249,115,22,.14)"
+        return             "Obesitas",       "#ef4444", "rgba(239,68,68,.14)"
+
+    bc, bcol, bbg    = bbu_style(zs_bbu)
+    btbc, btbcol, btbbg = bbtb_style(zs_bbtb)
+
     st.markdown(f"""
-    <div class="info-box">
-        💡 <strong>Rekomendasi:</strong> {rec}
-        <br><br>
-        ⚕️ <em>Hasil ini bersifat <strong>skrining awal</strong> dan tidak menggantikan pemeriksaan medis profesional.
-        Selalu konsultasikan ke tenaga kesehatan untuk diagnosis resmi.</em>
+    <div class="zs-grid">
+        <div class="zs-card">
+            <div class="zs-tag">Z-Score BB / Umur</div>
+            <div class="zs-val" style="color:{bcol};">{zs_bbu:+.2f}</div>
+            <div class="zs-desc">Berat Badan menurut Umur</div>
+            <span class="zs-badge" style="background:{bbg}; color:{bcol};">{bc}</span>
+        </div>
+        <div class="zs-card">
+            <div class="zs-tag">Z-Score BB / Tinggi</div>
+            <div class="zs-val" style="color:{btbcol};">{zs_bbtb:+.2f}</div>
+            <div class="zs-desc">Berat Badan menurut Tinggi</div>
+            <span class="zs-badge" style="background:{btbbg}; color:{btbcol};">{btbc}</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Kelompok usia info
-    kel_labels = {0:"ASI Eksklusif (0–6 bln)", 1:"MPASI Awal (6–11 bln)",
-                  2:"Baduta / 1000 HPK (12–23 bln)", 3:"Batita (24–36 bln)", 4:"Balita (37–60 bln)"}
-    bins = [-1, 6, 11, 23, 36, 60]
-    kel = 0
-    for i in range(len(bins)-1):
-        if umur_bulan > bins[i] and umur_bulan <= bins[i+1]:
+    # ── PROBABILITY GAUGE ──
+    fill_col = "#f87171" if prediction == 1 else "#34d399"
+    bar_pct  = max(2, min(97, pct))
+
+    st.markdown(f"""
+    <div class="gauge-wrap">
+        <div class="gauge-top">
+            <span class="gauge-ttl">Indeks Probabilitas Stunting</span>
+            <span class="gauge-num" style="color:{fill_col};">
+                {pct:.1f}<span style="font-size:.9rem; opacity:.55;">%</span>
+            </span>
+        </div>
+        <div class="gauge-track">
+            <div class="gauge-bar" style="width:100%;"></div>
+            <div class="gauge-pip" style="left:{bar_pct}%; color:{fill_col}; background:{fill_col};"></div>
+        </div>
+        <div class="gauge-ticks">
+            <span>Normal</span>
+            <span>Ambang batas 45%</span>
+            <span>Stunting</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── META PILLS ──
+    bmi_val = berat / (tinggi/100)**2
+    kel_map = {0:"ASI Eksklusif", 1:"MPASI Awal", 2:"Baduta / 1000 HPK", 3:"Batita", 4:"Balita"}
+    bins_k  = [-1,6,11,23,36,60]
+    kel     = 0
+    for i in range(len(bins_k)-1):
+        if umur_bulan > bins_k[i] and umur_bulan <= bins_k[i+1]:
             kel = [0,1,2,3,4][i]
+
+    is_1000hpk = umur_bulan <= 23
+    hpk_col  = "#34d399" if is_1000hpk else "#64748b"
+    hpk_text = "Aktif" if is_1000hpk else "Telah Lewat"
+
     st.markdown(f"""
-    <div class="info-box" style="margin-top:.8rem;">
-        🗂️ <strong>Kelompok Usia Permenkes:</strong> {kel_labels.get(kel, '-')}
-        &nbsp;|&nbsp; <strong>BMI Anak:</strong> {berat / (tinggi/100)**2:.1f} kg/m²
+    <div class="meta-row">
+        <div class="meta-pill">
+            <div class="mp-label">BMI Anak</div>
+            <div class="mp-val">{bmi_val:.1f}</div>
+            <div class="mp-sub">kg / m²</div>
+        </div>
+        <div class="meta-pill">
+            <div class="mp-label">Kelompok Usia</div>
+            <div class="mp-val" style="font-size:1rem; padding:.3rem 0;">{kel_map.get(kel,'—')}</div>
+            <div class="mp-sub">Permenkes No.2/2020</div>
+        </div>
+        <div class="meta-pill">
+            <div class="mp-label">Window 1000 HPK</div>
+            <div class="mp-val" style="color:{hpk_col}; font-size:1.1rem;">{hpk_text}</div>
+            <div class="mp-sub">0 – 23 bulan kritis</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── RECOMMENDATION ──
+    st.markdown(f"""
+    <div class="rec-strip">
+        <span class="rec-acc">Rekomendasi — </span>{rec_main}
+        <div class="rec-disc">
+            Hasil ini merupakan skrining awal berbasis AI dan tidak menggantikan diagnosis medis profesional.
+            Selalu konsultasikan ke dokter, bidan, atau tenaga kesehatan untuk penilaian klinis yang menyeluruh.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 # =====================================================================
-# FOOTER NOTE
+# ── FOOTER ──
 # =====================================================================
 st.markdown("""
-<div style="text-align:center; color:#9ca3af; font-size:.8rem; margin-top:3rem; padding-bottom:2rem;">
-    Dibuat berdasarkan <strong>Permenkes No. 2 Tahun 2020</strong> tentang Standar Antropometri Anak<br>
-    Model AI: Ensemble CatBoost + XGBoost • Referensi: WHO 2006 Growth Standards
+<div class="footer-note">
+    <span>Permenkes No. 2 Tahun 2020</span> — Standar Antropometri Anak
+    <span class="footer-dot">·</span>
+    <span>WHO 2006 Multicentre Growth Reference Study</span>
+    <br>Model Ensemble CatBoost + XGBoost
+    <span class="footer-dot">·</span>
+    Skrining Awal — Bukan Pengganti Diagnosis Medis
 </div>
 """, unsafe_allow_html=True)
