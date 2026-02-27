@@ -710,7 +710,7 @@ def plot_metrics():
 st.markdown("""
 <div class="hero">
     <div class="hero-grid"></div>
-    <div class="hero-badge">🌿 &nbsp; Sistem Skrining AI · Permenkes No. 2 Tahun 2020</div>
+    <div class="hero-badge">🌿 &nbsp; Sistem Prediksi Data Science · Permenkes No. 2 Tahun 2020</div>
     <h1 class="hero-title">Prediksi <em>Stunting</em> Balita</h1>
     <div class="hero-rule"></div>
     <p class="hero-sub">
@@ -1156,4 +1156,5 @@ st.markdown("""
     <br>Skrining Awal Berbasis AI — Bukan Pengganti Diagnosis Medis
 </div>
 """, unsafe_allow_html=True)
+
 
