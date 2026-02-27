@@ -265,6 +265,26 @@ div[data-testid="stNumberInput"] button:hover {
     background: radial-gradient(ellipse 65% 45% at 50% 0%,
         rgba(52,211,153,.12) 0%, transparent 70%);
 }
+.rp-waspada {
+    background: linear-gradient(160deg, #1a1400 0%, #221a00 100%);
+    border: 1px solid rgba(250,204,21,.25);
+    box-shadow: 0 0 60px rgba(250,204,21,.05);
+}
+.rp-waspada::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(ellipse 65% 45% at 50% 0%,
+        rgba(250,204,21,.10) 0%, transparent 70%);
+}
+.rp-sedang {
+    background: linear-gradient(160deg, #1a0e00 0%, #221400 100%);
+    border: 1px solid rgba(251,146,60,.25);
+    box-shadow: 0 0 60px rgba(251,146,60,.05);
+}
+.rp-sedang::before {
+    content:''; position:absolute; inset:0;
+    background: radial-gradient(ellipse 65% 45% at 50% 0%,
+        rgba(251,146,60,.11) 0%, transparent 70%);
+}
 .rp-stunting {
     background: linear-gradient(160deg, #1a0909 0%, #220d0d 100%);
     border: 1px solid rgba(248,113,113,.25);
@@ -896,20 +916,41 @@ if predict_btn:
     st.markdown('<p class="section-label">Hasil Analisis</p>', unsafe_allow_html=True)
 
     # ── RESULT PANEL ──
-    if prediction == 1:
-        rp_cls    = "rp-stunting"
-        rp_icon   = "⚠️"
-        rp_title  = "Risiko Stunting Terdeteksi"
-        rp_color  = "#f87171"
-        rp_eyeb   = "Perhatian · Tindak Lanjut Diperlukan"
-        rec_main  = "Segera konsultasikan ke tenaga kesehatan untuk intervensi gizi dan pemantauan tumbuh kembang yang lebih komprehensif."
+    # ── 4-LEVEL RISK TIERING ──
+    # Level ditentukan gabungan prediksi model + rentang probabilitas
+    # sehingga tampilan proporsional dengan besarnya risiko
+    if prediction == 0:
+        # Model: NORMAL — tumbuh kembang aman
+        rp_cls   = "rp-normal"
+        rp_icon  = "✓"
+        rp_title = "Tumbuh Kembang Normal"
+        rp_color = "#34d399"
+        rp_eyeb  = "Status Pertumbuhan · Aman"
+        rec_main = "Pertahankan asupan gizi seimbang, ASI/MPASI sesuai usia, dan lakukan pemantauan rutin di posyandu atau fasilitas kesehatan."
+    elif pct < 35:
+        # Model: STUNTING — tapi probabilitas rendah → waspada
+        rp_cls   = "rp-waspada"
+        rp_icon  = "○"
+        rp_title = "Perlu Diwaspadai"
+        rp_color = "#facc15"
+        rp_eyeb  = "Status Pertumbuhan · Perlu Perhatian"
+        rec_main = "Perhatikan kecukupan asupan gizi anak. Konsultasikan ke petugas gizi atau bidan untuk pemantauan lebih lanjut dan pastikan jadwal posyandu rutin dijalankan."
+    elif pct < 60:
+        # Model: STUNTING — probabilitas sedang → risiko sedang
+        rp_cls   = "rp-sedang"
+        rp_icon  = "⚡"
+        rp_title = "Risiko Stunting Sedang"
+        rp_color = "#fb923c"
+        rp_eyeb  = "Perhatian · Intervensi Gizi Dianjurkan"
+        rec_main = "Segera konsultasikan ke dokter atau ahli gizi. Evaluasi pola makan, asupan protein, dan stimulasi tumbuh kembang anak secara menyeluruh."
     else:
-        rp_cls    = "rp-normal"
-        rp_icon   = "✓"
-        rp_title  = "Tumbuh Kembang Normal"
-        rp_color  = "#34d399"
-        rp_eyeb   = "Status Pertumbuhan · Baik"
-        rec_main  = "Pertahankan asupan gizi seimbang, ASI/MPASI sesuai usia, dan lakukan pemantauan rutin di posyandu atau fasilitas kesehatan."
+        # Model: STUNTING — probabilitas tinggi → risiko tinggi
+        rp_cls   = "rp-stunting"
+        rp_icon  = "⚠️"
+        rp_title = "Risiko Stunting Tinggi"
+        rp_color = "#f87171"
+        rp_eyeb  = "Perhatian · Tindak Lanjut Segera Diperlukan"
+        rec_main = "Segera bawa ke fasilitas kesehatan (puskesmas/dokter spesialis anak) untuk intervensi gizi intensif dan pemantauan tumbuh kembang yang komprehensif."
 
     st.markdown(f"""
     <div class="result-panel {rp_cls}">
@@ -958,7 +999,7 @@ if predict_btn:
     """, unsafe_allow_html=True)
 
     # ── PROBABILITY GAUGE ──
-    fill_col = "#f87171" if prediction == 1 else "#34d399"
+    fill_col = rp_color
     bar_pct  = max(2, min(97, pct))
 
     st.markdown(f"""
