@@ -1,131 +1,87 @@
 import streamlit as st
-import joblib
 import pandas as pd
 import numpy as np
-import time
+import joblib
 
-# =====================================
-# PAGE CONFIG
-# =====================================
-st.set_page_config(
-    page_title="Prediksi Stunting",
-    page_icon="🩺",
-    layout="centered"
-)
+# =========================
+# LOAD MODEL & FITUR
+# =========================
+model = joblib.load("model.pkl")   # ganti sesuai nama model Anda
+fitur_training = joblib.load("fitur_training.pkl")
 
-# =====================================
-# CUSTOM CSS (BIAR KEREN)
-# =====================================
-st.markdown("""
-<style>
-.main {
-    background-color: #0f172a;
-}
-h1, h2, h3, label {
-    color: white !important;
-}
-.stButton>button {
-    width: 100%;
-    border-radius: 12px;
-    height: 3em;
-    font-size: 18px;
-    background-color: #2563eb;
-    color: white;
-}
-.block-container {
-    padding-top: 2rem;
-}
-</style>
-""", unsafe_allow_html=True)
+# =========================
+# JUDUL APP
+# =========================
+st.title("Prediksi Stunting Anak")
 
-# =====================================
-# CLASS ENSEMBLEMODEL (WAJIB ADA)
-# =====================================
-class EnsembleModel:
-    def __init__(self, models, weights=None):
-        self.models = models
-        self.weights = weights
+# =========================
+# INPUT USER
+# =========================
+st.subheader("Input Data Anak")
 
-    def predict_proba(self, X):
-        probs = np.mean([m.predict_proba(X) for m in self.models], axis=0)
-        return probs
+umur_bulan = st.number_input("Umur Bulan", min_value=0.0)
+berat = st.number_input("Berat (kg)", min_value=0.0)
+tinggi = st.number_input("Tinggi (cm)", min_value=0.0)
 
-    def predict(self, X):
-        probs = self.predict_proba(X)
-        return (probs[:,1] >= 0.5).astype(int)
+jk = st.selectbox("Jenis Kelamin", ["L", "P"])
+cara_ukur = st.selectbox("Cara Ukur", ["Berdiri", "Terlentang"])
 
-# =====================================
-# LOAD MODEL
-# =====================================
-package = joblib.load("model.pkl")
-model = package["model"]
-threshold = package["threshold"]
-features = package["features"]
+# =========================
+# FEATURE ENGINEERING
+# =========================
+def feature_engineering(df):
 
-# =====================================
-# HEADER
-# =====================================
-st.title("🩺 Prediksi Risiko Stunting Anak")
-st.caption("Aplikasi Prediksi Berbasis Machine Learning")
+    df = df.copy()
 
-st.markdown("---")
+    # ===== fitur turunan (sesuaikan training Anda) =====
+    df["age_sq"] = df["umur_bulan"] ** 2
+    df["age_log"] = np.log1p(df["umur_bulan"])
 
-# =====================================
-# INPUT CARD
-# =====================================
-st.subheader("📋 Input Data Anak")
+    df["rasio_bb_umur"] = df["berat"] / (df["umur_bulan"] + 1)
+    df["rasio_bb_tb"] = df["berat"] / (df["tinggi"] + 1)
 
-col1, col2 = st.columns(2)
+    df["bmi_proxy"] = df["berat"] / ((df["tinggi"]/100) ** 2)
 
-with col1:
-    umur_bulan = st.number_input("Umur Bulan", min_value=0.0, value=0.0)
-    berat = st.number_input("Berat (kg)", min_value=0.0, value=0.0)
-    jk = st.selectbox("Jenis Kelamin", ["L", "P"])
+    # encoding kategori
+    df["jk_encoded"] = df["jk"].map({"L": 1, "P": 0})
+    df["cara_ukur_encoded"] = df["cara_ukur"].map({
+        "Berdiri": 1,
+        "Terlentang": 0
+    })
 
-with col2:
-    tinggi = st.number_input("Tinggi (cm)", min_value=0.0, value=0.0)
-    cara_ukur = st.selectbox("Cara Ukur", ["Berdiri", "Terlentang"])
+    # hapus kolom string
+    df.drop(["jk", "cara_ukur"], axis=1, inplace=True)
 
-# encoding
-jk_encoded = 1 if jk == "L" else 0
-cara_ukur_encoded = 1 if cara_ukur == "Berdiri" else 0
+    return df
 
-# =====================================
-# BUILD INPUT MODEL
-# =====================================
-input_data = {}
+# =========================
+# PREDIKSI
+# =========================
+if st.button("Prediksi Sekarang"):
 
-input_data["umur_bulan"] = umur_bulan
-input_data["jk_encoded"] = jk_encoded
-input_data["berat"] = berat
-input_data["tinggi"] = tinggi
-input_data["cara_ukur_encoded"] = cara_ukur_encoded
+    # buat dataframe dari input
+    df = pd.DataFrame([{
+        "umur_bulan": umur_bulan,
+        "berat": berat,
+        "tinggi": tinggi,
+        "jk": jk,
+        "cara_ukur": cara_ukur
+    }])
 
-for f in features:
-    if f not in input_data:
-        input_data[f] = 0
+    # feature engineering
+    df = feature_engineering(df)
 
-# =====================================
-# PREDIKSI BUTTON
-# =====================================
-if st.button("🔍 Prediksi Sekarang"):
+    # SAMAKAN FITUR DENGAN TRAINING
+    df = df.reindex(columns=fitur_training, fill_value=0)
 
-    with st.spinner("Menganalisis data anak..."):
-        time.sleep(1.5)  # animasi loading
+    # prediksi
+    prob = model.predict_proba(df)[0][1]
+    pred = model.predict(df)[0]
 
-    df = pd.DataFrame([input_data])
-
-    prob = model.predict_proba(df)[:,1][0]
-    pred = int(prob >= threshold)
-
-    st.markdown("---")
-    st.subheader("📊 Hasil Prediksi")
-
-    st.progress(float(prob))
-
-    st.write(f"Probabilitas Risiko: **{prob:.2%}**")
+    # output hasil
+    st.subheader("Hasil Prediksi")
 
     if pred == 1:
-        st.error("⚠️ Anak Berisiko Stunting")
+        st.error(f"⚠️ Anak terindikasi STUNTING (Probabilitas: {prob:.2f})")
     else:
-        st.success("✅ Anak Tidak Berisiko Stunting")
+        st.success(f"✅ Anak NORMAL (Probabilitas: {prob:.2f})")
